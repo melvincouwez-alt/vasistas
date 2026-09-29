@@ -20,6 +20,29 @@ stays out of sight: you only see the applications you use.
 It is built for elementary OS and should work on other Debian and Ubuntu based systems with
 GTK 4 and Granite. Version 0.5 is an early, experimental release.
 
+## Not a remote desktop
+
+Vasistas is not a remote desktop client. Windows runs on your own computer, so we chose not to
+treat it as a distant machine: there is no remote session, no video stream and no network
+protocol between the two systems. What we aim for is a controlled virtualization, kept as light
+as possible and smooth enough for the professional tools people rely on every day.
+
+Controlled, because each piece is chosen and kept in hand: the virtual machine is started
+directly with QEMU, the screen, keyboard, mouse and clipboard go through our own channel, and a
+small agent inside Windows takes care of the windows. Windows itself is installed from
+Microsoft's media with settings made for this use, such as no lock screen and updates only when
+you decide.
+
+Light, because nothing is encoded or decoded: the screen is read from memory shared with the
+virtual machine. Windows pauses when you are not using it, memory it does not need goes back to
+Linux as it goes, and an optional step removes telemetry and services that serve no purpose
+here. On our machine, with Outlook open, the virtual machine uses about 4 GB of the 8 GB it is
+given.
+
+Smooth enough for work: typing, scrolling and moving between Word, Excel, Outlook or Power BI
+stay fluid, and in our measurements a key press shows on screen within roughly 25 to 40
+milliseconds. It is not tuned for 3D or games, as explained below.
+
 ## The experience we are aiming for
 
 - Each Windows application window is a real window of your desktop, with its own entry in the
