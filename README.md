@@ -4,7 +4,8 @@
 
 <h1 align="center">Vasistas</h1>
 
-<p align="center">Windows applications on the Linux desktop, one window at a time.</p>
+<p align="center">Windows applications on the Linux desktop, one window at a time.<br>
+Not a remote desktop: a controlled, lightweight virtual machine, smooth enough for professional tools.</p>
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Microsoft Word from the Windows virtual machine next to the Vasistas companion app, on an elementary OS wallpaper">
@@ -17,15 +18,15 @@ if they belonged there. Word, Excel or Power BI open from the Applications menu,
 icon in the dock, and move, resize and switch like any other window. The Windows desktop itself
 stays out of sight: you only see the applications you use.
 
+This is not a remote desktop application. Windows runs on your own computer, and Vasistas
+treats it that way: no remote session and no video stream, but a virtualization we keep under
+control, as light as we can make it and smooth enough for the professional tools you work with
+every day.
+
 It is built for elementary OS and should work on other Debian and Ubuntu based systems with
 GTK 4 and Granite. Version 0.5 is an early, experimental release.
 
-## Not a remote desktop
-
-Vasistas is not a remote desktop client. Windows runs on your own computer, so we chose not to
-treat it as a distant machine: there is no remote session, no video stream and no network
-protocol between the two systems. What we aim for is a controlled virtualization, kept as light
-as possible and smooth enough for the professional tools people rely on every day.
+## Our approach
 
 Controlled, because each piece is chosen and kept in hand: the virtual machine is started
 directly with QEMU, the screen, keyboard, mouse and clipboard go through our own channel, and a
