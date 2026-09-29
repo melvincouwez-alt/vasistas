@@ -13,7 +13,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Granite", "7.0")
-from gi.repository import Gio, GLib, Granite, Gtk  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Granite, Gtk  # noqa: E402
 
 from . import guestapps, vm  # noqa: E402
 from .app import APP_ID  # noqa: E402
@@ -22,6 +22,23 @@ from .version import PRERELEASE, VERSION, WEBSITE  # noqa: E402
 
 COMPANION_ID = f"{APP_ID}.Companion"
 POLL_S = 2
+# Marges et tailles des pages de réglages, reprises de l'application Paramètres d'elementary
+# (Granite ne les fournit pas : chaque application les pose elle-même)
+CSS = """
+settingspage .header-area widget:dir(ltr) { margin-left: 0.33rem; margin-right: 0.75rem; }
+settingspage .header-area image.large-icons { -gtk-icon-size: 4rem; }
+settingspage .header-area image.large-icons:dir(ltr) { margin-left: -0.33rem; margin-right: 0.58rem; }
+settingspage .header-area label.title-2 { font-weight: 600; font-size: 2rem; }
+settingspage .header-area label:not(.title-2) { font-size: 0.95rem; opacity: 0.85; }
+settingspage .header-area, settingspage .content-area { padding: 1rem; }
+settingspage .buttonbox { padding: 1rem; border-spacing: 0.5rem; }
+settingssidebar list { background: inherit; min-width: 16.67rem; }
+settingssidebar list row { padding: 0.5rem; }
+settingssidebar list row overlay { min-width: calc(32px + 0.5rem); }
+settingssidebar list row overlay:dir(ltr) { margin-right: 0.5rem; }
+settingssidebar list row overlay:dir(rtl) { margin-left: 0.5rem; }
+.banner { padding: 0; }
+"""
 
 
 class Window(Gtk.ApplicationWindow):
@@ -158,6 +175,10 @@ class App(Gtk.Application):
                              gs.get_property("prefers-color-scheme") == Granite.SettingsColorScheme.DARK)
         follow()
         gs.connect("notify::prefers-color-scheme", follow)
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         for name, handler, accels in (("guide", self.show_guide, ["F1"]),
                                       ("updates", lambda: self.show_updates(), []),
                                       ("about", self.show_about, []),

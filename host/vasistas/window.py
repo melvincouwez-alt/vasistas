@@ -25,6 +25,10 @@ HT_EDGES = {
     17: Gdk.SurfaceEdge.SOUTH_EAST,
 }
 DOUBLE_CLICK_S = 0.4
+# Barre de titre : Office (recherche, nom du fichier), l'Explorateur ou Edge y placent des
+# commandes qu'ils gèrent eux-mêmes alors que WM_NCHITTEST y répond HTCAPTION. Le clic part donc
+# vers Windows ; le déplacement de la fenêtre Linux ne commence qu'au-delà de ce glissement.
+CAPTION_DRAG_PX = 4
 HOST_EDGE_PX = 6
 EDGE_CURSORS = {
     Gdk.SurfaceEdge.NORTH: "ns-resize", Gdk.SurfaceEdge.SOUTH: "ns-resize",
@@ -68,7 +72,9 @@ class GuestView(Gtk.Picture):
         self.set_focusable(True)
         self.hit = 1
         self.buttons = set()
-        self.last_caption_press = 0.0
+        self.last_caption_click = 0.0
+        self.caption_press = None   # clic en cours dans la barre de titre, pas encore un glissement
+        self.swallowed = set()      # boutons dont le relâchement ne va pas à Windows
         self.scroll_acc = [0.0, 0.0]
         self.alloc = (0, 0)
         self.pending_move = None
@@ -170,6 +176,20 @@ class GuestView(Gtk.Picture):
         send = self.owner.send
 
         edge = self._host_edge(event)
+        if et == Gdk.EventType.MOTION_NOTIFY and self.caption_press is not None:
+            cp = self.caption_press
+            if abs(sx - cp["sx"]) < CAPTION_DRAG_PX and abs(sy - cp["sy"]) < CAPTION_DRAG_PX:
+                return True  # petit tremblement : toujours un clic, Windows ne voit pas bouger
+            # glissement : Windows reçoit un clic sur place (sans effet sur la barre de titre) et
+            # la fenêtre Linux suit le pointeur
+            self.caption_press = None
+            self.buttons.discard(cp["button"])
+            send({"t": "mouse.button", "id": wid, "x": cp["gx"], "y": cp["gy"], "button": cp["button"],
+                  "down": False})
+            toplevel = self.owner.toplevel_surface()
+            if toplevel is not None:
+                toplevel.begin_move(cp["device"], cp["button"], cp["sx"], cp["sy"], event.get_time())
+            return True
         if et == Gdk.EventType.MOTION_NOTIFY:
             if edge is not None:
                 # bordure de redimensionnement gérée par l'hôte : l'invité ne voit rien
@@ -198,13 +218,18 @@ class GuestView(Gtk.Picture):
                 return True
             if button == 1 and toplevel is not None:
                 if self.hit == HTCAPTION:
-                    now = time.monotonic()
-                    if now - self.last_caption_press < DOUBLE_CLICK_S:
-                        self.last_caption_press = 0.0
+                    if time.monotonic() - self.last_caption_click < DOUBLE_CLICK_S:
+                        # double-clic : agrandi ou rétabli par l'hôte ; Windows ne voit que le
+                        # premier clic (sinon il agrandirait de son côté et contredirait l'hôte)
+                        self.last_caption_click = 0.0
+                        self.swallowed.add(button)
                         self.owner.toggle_maximize()
-                    else:
-                        self.last_caption_press = now
-                        toplevel.begin_move(event.get_device(), button, sx, sy, event.get_time())
+                        return True
+                    self.caption_press = {"gx": gx, "gy": gy, "sx": sx, "sy": sy, "button": button,
+                                          "device": event.get_device()}
+                    self.buttons.add(button)
+                    send({"t": "mouse.move", "id": wid, "x": gx, "y": gy})
+                    send({"t": "mouse.button", "id": wid, "x": gx, "y": gy, "button": button, "down": True})
                     return True
                 edge = HT_EDGES.get(self.hit)
                 if edge is not None:
@@ -216,6 +241,13 @@ class GuestView(Gtk.Picture):
             return True
 
         # BUTTON_RELEASE
+        if button in self.swallowed:
+            self.swallowed.discard(button)
+            return True
+        if self.caption_press is not None and self.caption_press["button"] == button:
+            # clic simple dans la barre de titre : peut-être le premier d'un double-clic
+            self.caption_press = None
+            self.last_caption_click = time.monotonic()
         if button in self.buttons:
             self.buttons.discard(button)
             send({"t": "mouse.button", "id": wid, "x": gx, "y": gy, "button": button, "down": False})
