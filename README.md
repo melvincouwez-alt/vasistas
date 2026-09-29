@@ -1,74 +1,77 @@
-# Vasistas
+<p align="center">
+  <img src="data/icons/hicolor/128x128/apps/io.github.melvincouwez.Vasistas.svg" width="128" height="128" alt="Vasistas logo">
+</p>
 
-Vasistas affiche les applications d'une machine virtuelle Windows sur le bureau Linux, une
-fenêtre à la fois. Word, Excel, Outlook ou Power BI s'ouvrent depuis le menu Applications,
-ont leur icône dans le dock, se déplacent et se redimensionnent comme les autres fenêtres. Le
-bureau de Windows, lui, n'apparaît jamais.
+<h1 align="center">Vasistas</h1>
 
-Conçu pour elementary OS (bureau Pantheon, Wayland). Version 0.5, expérimentale.
+<p align="center">Windows applications on the Linux desktop, one window at a time.</p>
 
-## Pourquoi ne pas passer par RDP
+<p align="center">
+  <img src="docs/screenshot.png" alt="Microsoft Word from the Windows virtual machine next to the Vasistas companion app, on an elementary OS wallpaper">
+  <br>
+  <sub>Word, running in the Windows virtual machine, next to the Vasistas companion app.</sub>
+</p>
 
-Les outils existants (WinApps, WinBoat, LinOffice, Cassowary…) reposent sur le bureau à
-distance de Windows (RDP et RemoteApp) : Windows encode chaque fenêtre en flux vidéo, FreeRDP
-le décode côté Linux, comme pour un serveur situé à l'autre bout du réseau. Ça marche, mais
-la machine virtuelle tourne sur le même ordinateur, et ce détour se paie :
+Vasistas runs Windows in a virtual machine and shows its applications on your Linux desktop as
+if they belonged there. Word, Excel or Power BI open from the Applications menu, get their own
+icon in the dock, and move, resize and switch like any other window. The Windows desktop itself
+stays out of sight: you only see the applications you use.
 
-- l'édition Famille de Windows n'a pas de serveur RDP, il faut une édition Professionnelle
-  ou Entreprise ;
-- chaque image passe par un encodage et un décodage, avec la latence et le travail du
-  processeur qui vont avec ;
-- les fenêtres affichées par FreeRDP s'intègrent mal au bureau : icônes génériques, fenêtres
-  regroupées sous le même programme, menus et bulles décalés ;
-- la session RDP a sa propre vie (déconnexions, reconnexions, session verrouillée).
+It is built for elementary OS and should work on other Debian and Ubuntu based systems with
+GTK 4 and Granite. Version 0.5 is an early, experimental release.
 
-Vasistas n'utilise pas RDP. QEMU partage l'écran de Windows en mémoire avec l'application
-Linux (affichage D-Bus de QEMU, sans encodage ni réseau) ; un petit agent dans Windows
-indique où se trouve chaque fenêtre et reçoit souris, clavier et presse-papiers par un canal
-virtio. Chaque fenêtre Windows devient une vraie fenêtre GTK 4 du bureau, avec l'identifiant
-et l'icône de son application.
+## The experience we are aiming for
 
-## Ce que ça apporte
+- **One window per Windows window.** Each application window is a real window of your desktop,
+  with its own entry in the dock and in the window switcher. Menus, dialogs and tooltips appear
+  where you expect them.
+- **Your files, where you keep them.** Your Documents and Downloads folders show up as drives
+  in Windows, and Windows' own Documents, Pictures or Downloads folders can point to them.
+  Double-clicking a `.docx`, `.xlsx` or `.pbix` file in Files opens it in the matching Windows
+  application.
+- **One clipboard.** Text, formatted text and images copy and paste between both sides.
+- **Out of the way when idle.** Windows pauses itself when you are not using it and resumes on
+  the next click; memory it does not need goes back to Linux.
+- **A guided setup.** An assistant downloads Windows from Microsoft in the language you pick,
+  installs it unattended with a local account, then installs Microsoft Office and other common
+  applications.
+- **A companion app** to start or stop Windows, choose which applications appear in the menu,
+  decide which file types open in Windows, trim Windows down, and check for updates.
 
-- Toutes les éditions de Windows 10 et 11, Famille comprise.
-- Une fenêtre du bureau par fenêtre Windows, une icône par application dans le dock, l'icône
-  de chaque application reprise au gabarit des icônes d'elementary.
-- Un double-clic sur un .docx, un .xlsx ou un .pbix dans Fichiers l'ouvre dans l'application
-  Windows ; les types concernés se choisissent.
-- Les dossiers Linux (Documents, Téléchargements…) sont des lecteurs dans Windows, sans
-  partage réseau ; les dossiers Documents, Images… de Windows peuvent pointer dessus.
-- Presse-papiers commun : texte, texte mis en forme, images.
-- Windows se met en veille tout seul quand il ne sert pas et se réveille au premier clic ; la
-  mémoire qu'il n'utilise pas revient à Linux.
-- Installation guidée : l'ISO de Windows est téléchargée chez Microsoft dans la langue voulue,
-  Windows s'installe sans intervention (compte local, pas de compte Microsoft), puis Office
-  (offre et langue au choix) et d'autres applications courantes.
-- Une application compagnon pour démarrer ou arrêter Windows, régler sa puissance, choisir
-  les applications du menu, alléger Windows et suivre les mises à jour.
+## How it works
 
-## Ce que Vasistas n'est pas
+Windows runs in a QEMU/KVM virtual machine on your computer. Instead of streaming a remote
+desktop, Vasistas reads the Windows screen directly from QEMU's shared memory (D-Bus display),
+so nothing is encoded or sent over a network. A small agent inside Windows reports where each
+window is and receives mouse, keyboard and clipboard events over a virtio channel. On the Linux
+side, each Windows window becomes a GTK 4 window showing its part of the screen, labelled with
+the application's own identity so the desktop can group and decorate it properly. Folders are
+shared with virtio-fs.
 
-Vasistas n'est pas fait pour les jeux. Sans carte graphique prêtée à la machine virtuelle,
-Windows dessine en logiciel : les applications de bureau restent fluides, mais la 3D, les
-vidéos exigeantes et les jeux ne le sont pas, et les anti-triche refusent souvent les
-machines virtuelles. Pour jouer, Steam et Proton font bien mieux. Le prêt de la carte
-graphique dédiée existe, mais il reste expérimental.
+The technical details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the host/agent
+protocol in [PROTOCOL.md](PROTOCOL.md).
 
-Pas de son, de webcam ni de périphériques USB pour l'instant : les visioconférences se font
-mieux depuis Linux.
+## What it is not
 
-## Prérequis
+Vasistas is meant for desktop applications, not for games. Without a graphics card passed to
+the virtual machine, Windows renders in software: office and business applications stay
+responsive, but 3D, demanding video and games do not, and anti-cheat systems usually refuse
+virtual machines. Passing a dedicated graphics card to Windows is possible but experimental.
 
-- elementary OS 8 ou 9 (ou un système à base d'Ubuntu 24.04 ou plus récent avec GTK 4 et
-  Granite 7 ; seul Pantheon est testé) ;
-- processeur avec virtualisation matérielle activée (KVM), 16 Go de mémoire conseillés,
-  100 Go libres sur le disque ;
-- une licence Windows, ou une version d'évaluation de 90 jours téléchargée par l'assistant ;
-  une licence ou un abonnement pour Office et les logiciels payants.
+There is no sound, webcam or USB passthrough yet, and the interface is currently in French only.
+
+## Requirements
+
+- elementary OS 8 or 9, or another Debian or Ubuntu based system (Ubuntu 24.04 or later) with
+  GTK 4 and Granite 7; only the Pantheon desktop is tested so far
+- a processor with hardware virtualization enabled (KVM), 16 GB of memory recommended, and
+  about 100 GB of free disk space
+- a Windows license, or a 90-day evaluation version that the assistant can download; licenses
+  or subscriptions for Office and any other paid software
 
 ## Installation
 
-Téléchargez l'archive `vasistas-<version>.tar.gz` de la dernière version publiée, puis :
+Download `vasistas-<version>.tar.gz` from the latest release, then:
 
 ```
 tar xf vasistas-0.5.0.tar.gz
@@ -76,40 +79,36 @@ cd vasistas-0.5.0
 ./install.sh
 ```
 
-Le script installe Vasistas dans votre dossier personnel, sans droits administrateur. S'il
-manque des paquets du système, il donne la commande `sudo apt install …` à lancer. Ouvrez
-ensuite « Vasistas » dans le menu Applications : l'assistant prend la suite. Les mises à
-jour se font depuis l'application (menu, « Rechercher des mises à jour »).
+The script installs Vasistas in your home folder without administrator rights. If system
+packages are missing, it prints the `sudo apt install …` command to run. Then open "Vasistas"
+from the Applications menu and follow the assistant. Updates are offered from the app itself.
 
-Pour préparer un Windows déjà installé autrement : `install/configure-windows.ps1`, voir
+To prepare a Windows installation made by other means, see
 [docs/configure-windows.md](docs/configure-windows.md).
 
-## Commandes
+## Command line
 
-La commande `vasistas` (dans `~/.local/bin`) pilote aussi tout depuis un terminal :
+The `vasistas` command (in `~/.local/bin`) also works from a terminal:
 
 ```
-vasistas vm start|stop|status          # machine virtuelle
-vasistas launch-app winword            # une application connue
-vasistas open ~/Documents/rapport.docx # un fichier, dans l'application désignée
-vasistas files list|set csv excel      # types de fichiers ouverts dans Windows
-vasistas folders list|link|unlink      # dossiers de Windows reliés à Linux
-vasistas exec 'Get-Process'            # script PowerShell dans Windows
-vasistas companion                     # application compagnon
+vasistas vm start|stop|status          # the virtual machine
+vasistas launch-app winword            # a known application
+vasistas open ~/Documents/report.docx  # a file, in its Windows application
+vasistas files list|set csv excel      # file types opened in Windows
+vasistas folders list|link|unlink      # Windows folders pointing to Linux folders
+vasistas exec 'Get-Process'            # a PowerShell script inside Windows
+vasistas companion                     # the companion app
 ```
 
-## Développement
+## Development
 
-Le code de l'hôte est en Python avec GTK 4 et Granite (`host/vasistas`), l'agent Windows en
-C# .NET Framework 4.8 (`guest/Vasistas.Agent`, `dotnet build -c Release`). `./check.sh` lance
-les tests et compile l'agent ; `tools/make-release.sh` prépare l'archive d'une version.
-L'architecture est décrite dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), le protocole
-entre l'hôte et l'agent dans [PROTOCOL.md](PROTOCOL.md).
+The host is written in Python with GTK 4 and Granite (`host/vasistas`), the Windows agent in
+C# for .NET Framework 4.8 (`guest/Vasistas.Agent`, built with `dotnet build -c Release`).
+`./check.sh` runs the tests and builds the agent; `tools/make-release.sh` packages a release.
 
-## Licence
+## License
 
-Vasistas est distribué sous licence MIT (fichier [LICENSE](LICENSE)).
+Vasistas is released under the MIT License (see [LICENSE](LICENSE)).
 
-Windows, Office, Power BI et les autres logiciels cités appartiennent à leurs éditeurs ;
-Vasistas ne fournit ni licence ni logiciel Microsoft, il télécharge les installateurs
-officiels.
+Windows, Office, Power BI and the other software mentioned belong to their publishers. Vasistas
+does not ship any Microsoft software or license; it downloads the official installers.
