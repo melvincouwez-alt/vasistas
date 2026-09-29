@@ -1,0 +1,25 @@
+--- a/ui/qemu-pixman.c
++++ b/ui/qemu-pixman.c
+@@ -279,7 +279,12 @@
+ #ifdef WIN32
+     return qemu_win32_map_alloc(size, handle, errp);
+ #else
+-    return qemu_memfd_alloc(name, size, 0, handle, errp);
++    /*
++     * Vasistas : taille arrondie à la page et sceaux GROW/SHRINK, pour que le client
++     * D-Bus puisse faire de cet écran un dmabuf par /dev/udmabuf (affichage sans copie).
++     */
++    return qemu_memfd_alloc(name, ROUND_UP(size, qemu_real_host_page_size()),
++                            F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL, handle, errp);
+ #endif
+ }
+ 
+@@ -295,7 +300,7 @@
+         error_report_err(err);
+     }
+ #else
+-    qemu_memfd_free(ptr, size, handle);
++    qemu_memfd_free(ptr, ROUND_UP(size, qemu_real_host_page_size()), handle);
+ #endif
+ }
+ 
