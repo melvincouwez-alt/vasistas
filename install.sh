@@ -57,8 +57,8 @@ ln -sfn "$VERSION" "$ROOT/current"
 # 4. Commande
 cat > "$BIN/vasistas" <<WRAP
 #!/bin/sh
-# Vasistas (version active : ~/.local/opt/vasistas/current)
-exec env PYTHONPATH="$ROOT/current/host" python3 -m vasistas "\$@"
+# Vasistas (version active : ~/.local/opt/vasistas/current ; -P : ignorer le dossier courant)
+exec env PYTHONPATH="$ROOT/current/host" python3 -P -m vasistas "\$@"
 WRAP
 chmod 755 "$BIN/vasistas"
 
