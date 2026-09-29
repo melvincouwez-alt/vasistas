@@ -22,21 +22,19 @@ GTK 4 and Granite. Version 0.5 is an early, experimental release.
 
 ## The experience we are aiming for
 
-- **One window per Windows window.** Each application window is a real window of your desktop,
-  with its own entry in the dock and in the window switcher. Menus, dialogs and tooltips appear
-  where you expect them.
-- **Your files, where you keep them.** Your Documents and Downloads folders show up as drives
-  in Windows, and Windows' own Documents, Pictures or Downloads folders can point to them.
-  Double-clicking a `.docx`, `.xlsx` or `.pbix` file in Files opens it in the matching Windows
-  application.
-- **One clipboard.** Text, formatted text and images copy and paste between both sides.
-- **Out of the way when idle.** Windows pauses itself when you are not using it and resumes on
-  the next click; memory it does not need goes back to Linux.
-- **A guided setup.** An assistant downloads Windows from Microsoft in the language you pick,
-  installs it unattended with a local account, then installs Microsoft Office and other common
+- Each Windows application window is a real window of your desktop, with its own entry in the
+  dock and in the window switcher. Menus, dialogs and tooltips appear where you expect them.
+- Your Documents and Downloads folders show up as drives in Windows, and Windows' own
+  Documents, Pictures or Downloads folders can point to them. Double-clicking a `.docx`, `.xlsx`
+  or `.pbix` file in Files opens it in the matching Windows application.
+- Text, formatted text and images copy and paste between both sides.
+- Windows pauses itself when you are not using it and resumes on the next click; memory it does
+  not need goes back to Linux.
+- A setup assistant downloads Windows from Microsoft in the language you pick, installs it
+  unattended with a local account, then installs Microsoft Office and other common
   applications.
-- **A companion app** to start or stop Windows, choose which applications appear in the menu,
-  decide which file types open in Windows, trim Windows down, and check for updates.
+- A companion app starts or stops Windows, chooses which applications appear in the menu,
+  decides which file types open in Windows, trims Windows down and checks for updates.
 
 ## How it works
 
