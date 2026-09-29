@@ -23,22 +23,22 @@ from .version import PRERELEASE, VERSION, WEBSITE  # noqa: E402
 COMPANION_ID = f"{APP_ID}.Companion"
 POLL_S = 2
 # Marges et tailles des pages de réglages, reprises de l'application Paramètres d'elementary
-# (Granite ne les fournit pas : chaque application les pose elle-même)
+# (Granite ne les fournit pas : chaque application les pose elle-même ; nos pages sont des
+# « simplesettingspage »)
 CSS = """
-settingspage .header-area widget:dir(ltr) { margin-left: 0.33rem; margin-right: 0.75rem; }
-settingspage .header-area image.large-icons { -gtk-icon-size: 4rem; }
-settingspage .header-area image.large-icons:dir(ltr) { margin-left: -0.33rem; margin-right: 0.58rem; }
-settingspage .header-area label.title-2 { font-weight: 600; font-size: 2rem; }
-settingspage .header-area label:not(.title-2) { font-size: 0.95rem; opacity: 0.85; }
-settingspage .header-area, settingspage .content-area { padding: 1rem; }
-settingspage .buttonbox { padding: 1rem; border-spacing: 0.5rem; }
+settingspage .header-area widget:dir(ltr), simplesettingspage .header-area widget:dir(ltr) { margin-left: 0.33rem; margin-right: 0.75rem; }
+settingspage .header-area image.large-icons, simplesettingspage .header-area image.large-icons { -gtk-icon-size: 4rem; }
+settingspage .header-area image.large-icons:dir(ltr), simplesettingspage .header-area image.large-icons:dir(ltr) { margin-left: -0.33rem; margin-right: 0.58rem; }
+settingspage .header-area label.title-2, simplesettingspage .header-area label.title-2 { font-weight: 600; font-size: 2rem; }
+settingspage .header-area label:not(.title-2), simplesettingspage .header-area label:not(.title-2) { font-size: 0.95rem; opacity: 0.85; }
+settingspage .header-area, simplesettingspage .header-area, settingspage .content-area, simplesettingspage .content-area { padding: 1rem; }
+settingspage .buttonbox, simplesettingspage .buttonbox { padding: 1rem; border-spacing: 0.5rem; }
 settingssidebar list { background: inherit; min-width: 16.67rem; }
 settingssidebar list row { padding: 0.5rem; }
 settingssidebar list row overlay { min-width: calc(32px + 0.5rem); }
 settingssidebar list row overlay:dir(ltr) { margin-right: 0.5rem; }
 settingssidebar list row overlay:dir(rtl) { margin-left: 0.5rem; }
-.banner { padding: 0; }
-"""
+.banner { padding: 0; }"""
 
 
 class Window(Gtk.ApplicationWindow):
