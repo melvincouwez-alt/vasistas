@@ -48,6 +48,32 @@ class WindowsPage(Page):
         self.add(row("Démarrer Windows à l'ouverture de session",
                      "Les applications s'ouvrent ensuite sans attendre le démarrage de Windows.", auto))
 
+        self.header("Son")
+        snd = Gtk.Switch(active=vm.load_config().get("sound", True) is not False)
+
+        def on_snd(sw, _p):
+            c = vm.load_config()
+            c["sound"] = sw.get_active()
+            vm.save_config(c)
+        snd.connect("notify::active", on_snd)
+        self.add(row("Son de Windows",
+                     "Haut-parleurs et microphone, par PipeWire. Le microphone n'est lu que lorsqu'une "
+                     "application de Windows l'ouvre. S'applique au prochain démarrage de Windows.", snd))
+
+        self.header("Apparence")
+        tb = Gtk.Switch(active=bool(vm.load_config().get("native_titlebar", False)))
+
+        def on_tb(sw, _p):
+            c = vm.load_config()
+            c["native_titlebar"] = sw.get_active()
+            vm.save_config(c)
+        tb.connect("notify::active", on_tb)
+        self.add(row("Barre de titre du bureau (expérimental)",
+                     "Les fenêtres dont Windows dessine la barre de titre (Explorateur, Bloc-notes classique, "
+                     "boîtes de dialogue…) reçoivent celle du bureau, avec ses coins arrondis et son ombre. "
+                     "Office, Edge et les applications qui dessinent leur propre barre gardent la leur. "
+                     "S'applique aussi aux fenêtres déjà ouvertes.", tb))
+
         self.header("Maintenance")
         self.wu_btn = Gtk.Button(label="Ouvrir Windows Update")
         self.wu_btn.connect("clicked", lambda *_: self.windows_update())

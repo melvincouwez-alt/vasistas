@@ -1,6 +1,6 @@
 """Version de Vasistas et adresses du projet."""
 
-VERSION = "0.5.1"
+VERSION = "0.5.2"
 # version expérimentale : les mises à jour proposées incluent les préversions GitHub
 PRERELEASE = True
 GITHUB_REPO = "melvincouwez-alt/vasistas"

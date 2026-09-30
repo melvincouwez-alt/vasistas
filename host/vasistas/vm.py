@@ -196,6 +196,22 @@ def build_share(install: bool):
 
 # -- QEMU --
 
+def qemu_env() -> dict:
+    """Environnement de QEMU : les flux audio apparaissent sous le nom « Vasistas » dans les
+    réglages de son du bureau."""
+    return {**os.environ, "PIPEWIRE_PROPS": "{ application.name=Vasistas "
+            "application.icon-name=io.github.melvincouwez.Vasistas }"}
+
+
+def sound_args() -> list:
+    """Son de Windows sur PipeWire (haut-parleurs et micro) : le pilote HDA est fourni par Windows.
+    Le micro n'est lu que lorsqu'une application de Windows l'ouvre. Désactivable : config `sound`."""
+    if load_config().get("sound", True) is False:
+        return []
+    return ["-audiodev", "pipewire,id=snd0,out.latency=30000,in.latency=30000",
+            "-device", "ich9-intel-hda,id=hda", "-device", "hda-micro,bus=hda.0,audiodev=snd0"]
+
+
 def qemu_args(install: bool, card=None) -> list:
     cpus, memory = resources()
     args = [
@@ -225,9 +241,11 @@ def qemu_args(install: bool, card=None) -> list:
         "-device", "virtserialport,chardev=vas,name=org.vasistas.0",
         "-qmp", f"unix:{QMP},server=on,wait=off",
         "-qmp", f"unix:{QMP_HOST},server=on,wait=off",
-        *(["-device", "virtio-vga-gl,hostmem=4G,blob=on,venus=on"] if PROFILE == "yttrium"
+        *(["-device", "virtio-vga-gl,hostmem=4G,blob=on,venus=on"]
+          if PROFILE == "yttrium" and not os.environ.get("VASISTAS_NO_VENUS")
           else ["-device", f"virtio-vga,xres={SCREEN[0]},yres={SCREEN[1]}"]),
         "-device", "qemu-xhci", "-device", "usb-tablet",
+        *sound_args(),
         # ballon piloté par balloon.py (le pilote Windows ignore free-page-reporting, sans effet mais sans gêne)
         "-device", "virtio-balloon-pci,id=balloon0,free-page-reporting=on",
     ]
@@ -253,9 +271,9 @@ def qemu_args(install: bool, card=None) -> list:
             "-device", "ide-cd,drive=wincd,bus=ide.0,bootindex=0",
             "-display", "gtk,zoom-to-fit=on",
         ]
-    elif PROFILE == "yttrium":
+    elif PROFILE == "yttrium" and not os.environ.get("VASISTAS_NO_VENUS"):
         # la doc d'Yttrium demande un affichage visible (fenêtre QEMU classique)
-        args += ["-display", "gtk,gl=on,zoom-to-fit=on"]
+        args += ["-display", os.environ.get("VASISTAS_YTTRIUM_DISPLAY", "gtk,gl=on,zoom-to-fit=on")]
     else:
         args += ["-display", "dbus,p2p=yes", "-daemonize"]
     return args
@@ -598,7 +616,7 @@ def start(wait_socket=True):
                 card = None
     with open(LOGFILE, "ab") as log:
         if PROFILE == "yttrium":
-            subprocess.Popen(qemu_args(False), stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+            subprocess.Popen(qemu_args(False), env=qemu_env(), stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                              start_new_session=True)
             for _ in range(50):
                 if pid():
@@ -606,7 +624,7 @@ def start(wait_socket=True):
                 time.sleep(0.1)
         else:
             try:
-                subprocess.run(qemu_args(False, card), check=True, stdout=log, stderr=log)
+                subprocess.run(qemu_args(False, card), env=qemu_env(), check=True, stdout=log, stderr=log)
             except subprocess.CalledProcessError:
                 release_gpu()
                 raise

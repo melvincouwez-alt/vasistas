@@ -29,6 +29,22 @@
   Documents, Téléchargements, Images, Musique, Vidéos et Bureau de Windows peuvent pointer
   sur les dossiers Linux (SHSetKnownFolderPath), partagés au passage s'il le faut ; le chemin
   d'avant est gardé pour revenir en arrière.
+- **Échelle** : Windows n'a qu'un écran, donc une seule échelle, celle de l'écran Linux qui
+  porte le plus de surface de fenêtres Windows (recalculée quand une fenêtre change d'écran,
+  s'ouvre ou se ferme, jamais sur un simple changement de focus). Résolution de l'invité
+  fixe : le plus grand écran Linux sur chaque axe, en pixels physiques. L'hôte n'envoie que des paliers acceptés par Windows (100,
+  125… 500 %) : 175 % pour un écran à 1,667. Chaque fenêtre annonce son DPI
+  (`GetDpiForWindow`, champ `dpi` de window.new/window.update), car Windows ne la redessine
+  à la nouvelle échelle qu'une fois posée. Si ce DPI est le palier de l'écran où se trouve
+  la fenêtre, l'image est affichée pixel pour pixel par un nœud de texture simple, calé sur
+  les pixels de l'écran (`append_scaled_texture` est rendu à la taille logique puis agrandi,
+  même en NEAREST : test `tests/test_render.py`). Sinon (fenêtre sur un autre écran), elle
+  est ramenée à sa taille logique, réduite en TRILINEAR ou agrandie en LINEAR.
+- **Son** : carte HDA émulée par QEMU sur PipeWire (haut-parleurs et micro), flux nommés
+  « Vasistas » dans les réglages de son. Désactivable (config `sound`).
+- **Barre de titre du bureau** (expérimental, config `native_titlebar`) : l'agent annonce
+  la hauteur de la barre de titre dessinée par Windows (champ `nc`, 0 si l'application
+  dessine la sienne) ; l'hôte masque ces lignes et met une barre elementary à la place.
 - **Gala** mémorise taille et place de chaque fenêtre par application (WindowStateSaver)
   et les réimpose à l'ouverture : pendant 1,5 s après l'affichage, l'hôte redemande la
   taille de Windows au lieu de la lui transmettre.

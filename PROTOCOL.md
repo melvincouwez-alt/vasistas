@@ -32,9 +32,11 @@ de `hello` de l'invité. À chaque `hello` reçu, l'invité renvoie son `hello` 
 ## Invité -> hôte
 
 - `hello {version, screen:[w,h], dpi}`
-- `window.new {id, title, rect:[x,y,w,h], kind, owner, maximized}`
-  `kind` : `normal` | `dialog` | `popup`. `owner` : id ou 0.
-- `window.update {id, title?, rect?, maximized?, minimized?}`
+- `window.new {id, title, rect:[x,y,w,h], kind, owner, maximized, dpi, nc}`
+  `kind` : `normal` | `dialog` | `popup`. `owner` : id ou 0. `dpi` : DPI de la fenêtre dans
+  Windows (GetDpiForWindow), qui ne suit la nouvelle échelle qu'une fois la fenêtre posée.
+  `nc` : hauteur de la barre de titre dessinée par Windows, 0 si l'application dessine la sienne.
+- `window.update {id, title?, rect?, maximized?, minimized?, dpi?, nc?}`
 - `window.close {id}`
 - `window.focus {id}` : fenêtre au premier plan dans l'invité
 - `frame {id, w, h}` : fin d'une série de tuiles, l'image est cohérente

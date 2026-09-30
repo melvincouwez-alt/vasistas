@@ -52,6 +52,11 @@ milliseconds. It is not tuned for 3D or games, as explained below.
   Documents, Pictures or Downloads folders can point to them. Double-clicking a `.docx`, `.xlsx`
   or `.pbix` file in Files opens it in the matching Windows application.
 - Text, formatted text and images copy and paste between both sides.
+- Windows plays sound through PipeWire and can use your microphone; the microphone is only
+  read while a Windows application has it open. Sound can be turned off in the companion app.
+- Windows takes the scale of the screen that holds most of its windows, and windows on that
+  screen are shown pixel for pixel, so text stays sharp. Clicking from one screen to another
+  changes nothing; moving windows across does, once they are dropped.
 - Windows pauses itself when you are not using it and resumes on the next click; memory it does
   not need goes back to Linux.
 - A setup assistant downloads Windows from Microsoft in the language you pick, installs it
@@ -59,6 +64,10 @@ milliseconds. It is not tuned for 3D or games, as explained below.
   applications.
 - A companion app starts or stops Windows, chooses which applications appear in the menu,
   decides which file types open in Windows, trims Windows down and checks for updates.
+- Experimental: windows whose title bar is drawn by Windows (File Explorer, classic dialogs)
+  can get the desktop's own title bar instead, with its rounded corners and shadow. Office, Edge
+  and applications that draw their own title bar keep theirs. Turn it on in the companion app,
+  under Windows > Appearance.
 
 ## How it works
 
@@ -80,7 +89,23 @@ the virtual machine, Windows renders in software: office and business applicatio
 responsive, but 3D, demanding video and games do not, and anti-cheat systems usually refuse
 virtual machines. Passing a dedicated graphics card to Windows is possible but experimental.
 
-There is no sound, webcam or USB passthrough yet, and the interface is currently in French only.
+There is no webcam or USB passthrough yet, and the interface is currently in French only.
+
+### Sharpness on several screens
+
+Windows has a single display, so a single scale. When your screens use different scales, for
+example an external monitor at 100 % and a laptop screen at 200 %, only the windows on one of
+them can be drawn by Windows at the right size. Windows on the other screen are resized by
+the desktop and can look soft or blurry. This comes from how the image is rendered, not from
+the application itself, and moving the windows back fixes it.
+
+To keep this to a minimum:
+
+- prefer whole-number scales (100 %, 200 %): Windows then has an exact matching step, and a
+  window on the other screen is resized by exactly two, which stays readable;
+- fractional scales such as 167 % work, but Windows uses its nearest step (175 %) and windows
+  moved to another screen lose more detail;
+- keep the Windows applications you use together on the same screen when you can.
 
 ## Requirements
 
@@ -96,8 +121,8 @@ There is no sound, webcam or USB passthrough yet, and the interface is currently
 Download `vasistas-<version>.tar.gz` from the latest release, then:
 
 ```
-tar xf vasistas-0.5.0.tar.gz
-cd vasistas-0.5.0
+tar xf vasistas-0.5.2.tar.gz
+cd vasistas-0.5.2
 ./install.sh
 ```
 

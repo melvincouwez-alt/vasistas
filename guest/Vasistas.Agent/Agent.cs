@@ -16,6 +16,7 @@ namespace Vasistas.Agent
         public string Kind;
         public uint Owner;
         public bool Minimized;
+        public int Dpi;         // DPI de la fenêtre dans Windows : l'hôte en tire son échelle
         public bool Occluded; // une autre fenêtre suivie la recouvre en partie dans l'invité
         public bool HostHidden; // sa fenêtre Linux est réduite ou masquée : rien à capturer
         public readonly Capture Capture = new Capture();
@@ -23,6 +24,7 @@ namespace Vasistas.Agent
         public int Unchanged;   // captures successives sans changement : l'intervalle s'allonge
         public int Hit = -1;
         public string Cursor;
+        public int Nc;          // hauteur de la barre de titre native de Windows (0 : dessinée par l'application)
     }
 
     sealed class Agent
@@ -930,6 +932,9 @@ namespace Vasistas.Agent
             {
                 int pref = Native.DWMWCP_DONOTROUND;
                 Native.DwmSetWindowAttribute(h, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, 4);
+                // pas de liseré de Windows : l'hôte dessine le cadre (coins, ombre)
+                int none = Native.DWMWA_COLOR_NONE;
+                Native.DwmSetWindowAttribute(h, Native.DWMWA_BORDER_COLOR, ref none, 4);
                 if (Native.IsZoomed(h))
                 {
                     // l'hôte gère l'agrandissement ; dans l'invité la fenêtre reste normale
@@ -939,6 +944,7 @@ namespace Vasistas.Agent
                 EnsureOnScreen(tw);
             }
             tw.Rect = Native.Bounds(h);
+            tw.Nc = popup ? 0 : Native.NativeCaption(h);
             tw.Minimized = Native.IsIconic(h);
             windows[h] = tw;
             if (!popup) lastActiveId = Native.GetForegroundWindow() == h ? tw.Id : lastActiveId;
@@ -962,7 +968,8 @@ namespace Vasistas.Agent
                 { "app", app.Id }, { "appName", app.Name }, { "exe", app.Exe },
                 { "rect", new[] { tw.Rect.Left, tw.Rect.Top, tw.Rect.Width, tw.Rect.Height } },
                 { "kind", tw.Kind }, { "owner", tw.Owner }, { "maximized", maximized },
-                { "occluded", tw.Occluded }, { "minimized", tw.Minimized },
+                { "occluded", tw.Occluded }, { "minimized", tw.Minimized }, { "nc", tw.Nc },
+                { "dpi", tw.Dpi = (int)Native.GetDpiForWindow(tw.Hwnd) },
             });
         }
 
@@ -994,6 +1001,15 @@ namespace Vasistas.Agent
                     tw.Rect = r;
                     msg["rect"] = new[] { r.Left, r.Top, r.Width, r.Height };
                 }
+            }
+            // Après un changement d'échelle, chaque fenêtre passe au nouveau DPI à son rythme :
+            // l'hôte doit savoir à quelle échelle est dessinée l'image qu'il reçoit.
+            int dpi = (int)Native.GetDpiForWindow(h);
+            if (dpi > 0 && dpi != tw.Dpi) { tw.Dpi = dpi; msg["dpi"] = dpi; }
+            if (tw.Kind != "popup" && !tw.Minimized)
+            {
+                int nc = Native.NativeCaption(h);
+                if (nc != tw.Nc) { tw.Nc = nc; msg["nc"] = nc; }
             }
             if (msg.Count > 2) Send(msg);
         }

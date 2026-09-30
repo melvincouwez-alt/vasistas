@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 
 APP_ID = "io.github.melvincouwez.Vasistas"
 DEACTIVATE_DELAY_MS = 80
-SCALE_DEBOUNCE_MS = 300
+SCALE_DEBOUNCE_MS = 1000
 READY_TIMEOUT_S = 150
 SPLASH_MAX_S = 45
 
@@ -72,6 +72,22 @@ def notify(summary, body=""):
         pass
 
 
+
+WINDOWS_SCALES = (100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500)
+
+
+def windows_step(scale):
+    """Échelle envoyée à Windows : toujours un palier qu'il accepte (100, 125… 500 %),
+    jamais l'échelle brute de l'écran Linux (1,667 sur le portable)."""
+    return min(WINDOWS_SCALES, key=lambda p: abs(p - scale * 100)) / 100
+
+
+def windows_dpi(scale):
+    """DPI que Windows prendra pour une échelle demandée : le palier le plus proche,
+    comme Display.Apply dans l'agent."""
+    step = min(WINDOWS_SCALES, key=lambda p: abs(p - scale * 100))
+    return round(step * 96 / 100)
+
 class VasistasApp(Gtk.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
@@ -84,11 +100,15 @@ class VasistasApp(Gtk.Application):
         self.guest_ready = False
         self.channel = None
         self.scale = 1.0
+        # DPI Windows -> échelle de l'hôte demandée pour lui (175 % dans Windows pour
+        # un écran Linux à 1,667 : Windows ne fait que des paliers)
+        self.dpi_scales = {}
         self.scale_source = 0
         self.sleep = None
         self.balloon = None
         self.watched_monitors = []
-        self.last_active = None   # dernière fenêtre active : son écran donne l'échelle de l'invité
+        self.last_active = None   # dernière fenêtre active
+        self.work_monitor = None  # écran dont Windows prend l'échelle (voir _current_monitor)
         self.held = False
         self.deactivate_source = 0
         self.starting_vm = False
@@ -140,6 +160,8 @@ class VasistasApp(Gtk.Application):
         from .balloon import BalloonManager
         self.balloon = BalloonManager(self)
         GLib.timeout_add_seconds(2, self._sweep_orphans)
+        self.titlebar_state = self.native_titlebar()
+        GLib.timeout_add_seconds(2, self._refresh_titlebars)
         self.stall_last = time.monotonic()
         GLib.timeout_add(STALL_TICK_MS, self._stall_tick)
         threading.Thread(target=self._watchdog, name="vasistas-watchdog", daemon=True).start()
@@ -155,26 +177,64 @@ class VasistasApp(Gtk.Application):
                 monitor.connect("notify::geometry", lambda *a: self.schedule_update_scale())
         self.schedule_update_scale()
 
+    def _refresh_titlebars(self):
+        """L'option « barre de titre du bureau » a été changée dans le compagnon."""
+        state = self.native_titlebar()
+        if state != self.titlebar_state:
+            self.titlebar_state = state
+            for view in list(self.views.values()):
+                if isinstance(view, GuestWindow):
+                    view._apply_caption(view.nc, self.infos.get(view.wid, {}).get("rect"))
+        return True
+
+    def native_titlebar(self):
+        """Option expérimentale : barre de titre du bureau à la place de celle de Windows."""
+        return bool(vm.load_config().get("native_titlebar", False))
+
+    def guest_scale_for(self, dpi):
+        """Échelle hôte d'une fenêtre dessinée par Windows à `dpi`."""
+        if not dpi:
+            return self.scale
+        return self.dpi_scales.get(dpi, dpi / 96)
+
     def schedule_update_scale(self):
         """Regroupe les changements (plusieurs fenêtres qui changent d'écran en même temps)."""
-        if not self.scale_source:
-            self.scale_source = GLib.timeout_add(SCALE_DEBOUNCE_MS, self._update_scale)
+        # temporisation glissante : tant que la fenêtre passe d'un écran à l'autre (glisser
+        # à cheval sur deux écrans), on attend qu'elle se pose avant de changer l'échelle
+        if self.scale_source:
+            GLib.source_remove(self.scale_source)
+        self.scale_source = GLib.timeout_add(SCALE_DEBOUNCE_MS, self._update_scale)
 
     def _current_monitor(self):
-        """Écran de référence de l'invité : celui de la dernière fenêtre active.
-        Windows n'a qu'un écran, donc une seule échelle : on suit l'écran où l'on travaille."""
+        """Écran de référence de l'invité : celui qui porte le plus de surface de fenêtres
+        Windows. Windows n'a qu'un écran, donc une seule échelle ; un simple changement de
+        focus ne la change pas (chaque changement fait redessiner toutes les fenêtres),
+        seul un déplacement de fenêtre, une ouverture, une fermeture ou un écran modifié."""
         display = Gdk.Display.get_default()
-        win = self.last_active
-        if win is not None and win.get_realized():
-            surface = win.get_surface()
-            monitor = display.get_monitor_at_surface(surface) if surface is not None else None
-            if monitor is not None:
-                return monitor
         monitors = display.get_monitors()
-        if not monitors.get_n_items():
-            return None
-        # sans fenêtre : le plus grand écran (l'écran externe au bureau, sinon l'écran du portable)
         items = [monitors.get_item(i) for i in range(monitors.get_n_items())]
+        if not items:
+            return None
+        area = {}
+        for view in list(self.views.values()):
+            if not isinstance(view, GuestWindow) or not view.get_visible() or not view.get_realized():
+                continue
+            surface = view.get_surface()
+            if surface is None or surface.get_state() & Gdk.ToplevelState.MINIMIZED:
+                continue
+            monitor = display.get_monitor_at_surface(surface)
+            if monitor is not None:
+                area[monitor] = area.get(monitor, 0) + view.get_width() * view.get_height()
+        if area:
+            best = max(area, key=area.get)
+            # à surface égale, on garde l'écran actuel (pas de bascule pour rien)
+            if self.work_monitor in area and area[self.work_monitor] >= area[best]:
+                best = self.work_monitor
+            self.work_monitor = best
+            return best
+        if self.work_monitor in items:
+            return self.work_monitor
+        # sans fenêtre : le plus grand écran (l'écran externe au bureau, sinon l'écran du portable)
         return max(items, key=lambda m: m.get_geometry().width * m.get_geometry().height)
 
     def _update_scale(self):
@@ -187,26 +247,30 @@ class VasistasApp(Gtk.Application):
         changed = scale != self.scale
         self.scale = scale
         # statistiques de l'agent toutes les 2 s seulement en mode verbeux (-v)
-        self.channel.hello_extra = {"scale": scale, "stats": log.isEnabledFor(logging.DEBUG)}
+        self.channel.hello_extra = {"scale": windows_step(scale), "stats": log.isEnabledFor(logging.DEBUG)}
+        self.dpi_scales[windows_dpi(scale)] = scale
         if changed and self.guest_ready:
             log.info("échelle de l'invité : %.3f (%s)", scale, monitor.get_connector())
-            self.send({"t": "display", "scale": scale})
+            self.send({"t": "display", "scale": windows_step(scale)})
         self._apply_resolution()
         return False
 
     def _apply_resolution(self):
-        """Écran de Windows = écran de l'hôte, en pixels physiques : une fenêtre agrandie
-        côté hôte tient alors dans l'écran de l'invité, sans étirement."""
-        monitor = self._current_monitor()
-        if self.screen is None or monitor is None:
+        """Écran de Windows fixe, assez grand pour le plus grand écran de l'hôte (en pixels
+        physiques) : une fenêtre agrandie côté hôte y tient sans étirement, et changer
+        d'écran de travail ne redimensionne plus les fenêtres ni le mode du pilote."""
+        monitors = Gdk.Display.get_default().get_monitors()
+        items = [monitors.get_item(i) for i in range(monitors.get_n_items())]
+        if self.screen is None or not items:
             return
-        geo = monitor.get_geometry()
-        scale = monitor.get_scale()
-        w, h = round(geo.width * scale), round(geo.height * scale)
+        sizes = [(round(m.get_geometry().width * m.get_scale()), round(m.get_geometry().height * m.get_scale()))
+                 for m in items]
+        w, h = max(x for x, _ in sizes), max(y for _, y in sizes)
         if (w, h) != (self.screen.width, self.screen.height):
             log.info("résolution de l'invité : %dx%d", w, h)
+            big = max(items, key=lambda m: m.get_geometry().width * m.get_geometry().height)
             # le pilote peut ignorer SetUIInfo (virtio-gpu DOD) : l'agent change alors le mode
-            self.screen.set_ui_info(w, h, monitor.get_width_mm(), monitor.get_height_mm())
+            self.screen.set_ui_info(w, h, big.get_width_mm(), big.get_height_mm())
             self.send({"t": "display", "resolution": [w, h]})
 
     def do_shutdown(self):
@@ -450,9 +514,8 @@ class VasistasApp(Gtk.Application):
         if self.deactivate_source:
             GLib.source_remove(self.deactivate_source)
             self.deactivate_source = 0
-        if win is not self.last_active:
-            self.last_active = win
-            self.schedule_update_scale()
+        # le focus ne change pas l'échelle de l'invité (voir _current_monitor)
+        self.last_active = win
         self.send({"t": "window.activate", "id": win.wid})
         # copie faite sous Linux avant de revenir dans une application Windows
         self.clipboard.push()
@@ -599,7 +662,7 @@ class VasistasApp(Gtk.Application):
         log.info("agent relancé dans l'invité")
         self.send({"t": "hello", "version": 1, **self.channel.hello_extra})
         if self.screen is not None:
-            self.send({"t": "display", "framebuffer": True, "scale": self.scale})
+            self.send({"t": "display", "framebuffer": True, "scale": windows_step(self.scale)})
             GLib.timeout_add(500, lambda: self._apply_resolution() and False)
 
     def _on_exec_result(self, msg):
@@ -824,7 +887,8 @@ class VasistasApp(Gtk.Application):
         if self.last_active is not None and self.last_active.wid == wid:
             self.last_active = None
         self.inline.discard(wid)
-        self.views.pop(wid, None)
+        if isinstance(self.views.pop(wid, None), GuestWindow):
+            self.schedule_update_scale()  # l'écran de travail peut changer
         self.infos.pop(wid, None)
         self.textures.pop(wid, None)
 
@@ -854,7 +918,7 @@ class VasistasApp(Gtk.Application):
         if not screen.open(sock):
             return False
         self.screen = screen
-        self.send({"t": "display", "framebuffer": True, "scale": self.scale})
+        self.send({"t": "display", "framebuffer": True, "scale": windows_step(self.scale)})
         log.info("écran lu dans QEMU")
         GLib.timeout_add(500, lambda: self._apply_resolution() and False)
         if log.isEnabledFor(logging.DEBUG):

@@ -44,6 +44,11 @@ SIZE_TOLERANCE_PX = 2
 # fenêtre de la même application : juste après l'affichage, la taille de Windows fait foi.
 MAP_GRACE_MS = 1500
 MAX_SIZE_FIXES = 2
+# Hauteur de repli de la barre de titre GTK avant sa première mesure
+HEADER_FALLBACK_PX = 47
+# Seule une barre de titre dessinée par Windows (zone non cliente) est remplacée : celles
+# d'Office, de WinUI ou d'Edge sont dessinées par l'application dans la zone cliente.
+MIN_NATIVE_CAPTION_PX = 16
 
 
 def scale_of(widget) -> float:
@@ -54,6 +59,20 @@ def scale_of(widget) -> float:
     if surface is None:
         return float(widget.get_scale_factor())
     return surface.get_scale()
+
+
+def guest_scale_on(app, dpi, widget):
+    """Échelle hôte d'une fenêtre dessinée par Windows à `dpi`, affichée dans `widget`.
+    Si ce DPI est le palier de l'écran où se trouve la fenêtre (175 % pour 1,667), l'image
+    est prise telle quelle, 1 pixel Windows = 1 pixel de l'écran : c'est le cas courant, et
+    la moindre mise à l'échelle rend le texte flou (traits fins perdus). Sinon (juste après
+    un changement d'écran), taille logique d'après le DPI."""
+    from .app import windows_dpi
+    if widget is not None:
+        surface_scale = scale_of(widget)
+        if not dpi or windows_dpi(surface_scale) == dpi:
+            return surface_scale
+    return app.guest_scale_for(dpi)
 
 
 class GuestView(Gtk.Picture):
@@ -83,6 +102,7 @@ class GuestView(Gtk.Picture):
         self.cursor_name = "default"
         self.texture = None
         self.src_rect = None
+        self.nc_top = 0   # lignes du haut (pixels invité) masquées : barre de titre remplacée par celle de Linux
         legacy = Gtk.EventControllerLegacy()
         legacy.connect("event", self._on_event)
         self.add_controller(legacy)
@@ -112,14 +132,50 @@ class GuestView(Gtk.Picture):
             return
         # Échelle fixe (1 pixel invité = 1 pixel écran) : pendant un redimensionnement,
         # l'image garde sa taille le temps que Windows redessine, au lieu d'être étirée.
-        k = 1 / scale_of(self)
+        # L'image est à l'échelle où Windows dessine la fenêtre ; sur un écran d'une autre
+        # échelle (juste après un changement d'écran), elle est remise à la taille logique.
+        gs = self.owner.guest_scale()
+        k = 1 / gs
+        exact = abs(scale_of(self) - gs) < 0.01
+        state = (round(gs, 3), round(scale_of(self), 3))
+        if state != getattr(self, "_drawn_state", None):
+            self._drawn_state = state
+            # trace des changements : une image mise à l'échelle est floue
+            (log.debug if exact else log.info)(
+                "fenêtre %s dessinée à l'échelle %.3f sur un écran à %.3f (%s)",
+                getattr(self.owner, "wid", "?"), gs, state[1], "1:1" if exact else "mise à l'échelle")
         W, H = self.get_width(), self.get_height()
         x, y, w, h = self.src_rect or (0, 0, texture.get_width(), texture.get_height())
+        y, h = y + self.nc_top, h - self.nc_top
         snapshot.push_clip(Graphene.Rect().init(0, 0, min(W, w * k), min(H, h * k)))
-        snapshot.append_scaled_texture(
-            texture, Gsk.ScalingFilter.NEAREST,
-            Graphene.Rect().init(-x * k, -y * k, texture.get_width() * k, texture.get_height() * k))
+        tw, th = texture.get_width() * k, texture.get_height() * k
+        if exact:
+            # 1:1 : nœud de texture simple, calé sur les pixels de l'écran. Un nœud
+            # append_scaled_texture est d'abord rendu à sa taille logique puis agrandi à
+            # l'échelle de l'écran (blocs 2x2 à 200 %, moiré à 167 %), même en NEAREST.
+            dx, dy = self._device_offset()
+            snapshot.append_texture(texture, Graphene.Rect().init(dx - x * k, dy - y * k, tw, th))
+        else:
+            # fenêtre sur un autre écran que celui de travail : réduite (Windows à 200 %,
+            # écran à 100 %) par mipmaps, bien plus lisible qu'en linéaire ; agrandie en linéaire
+            filt = Gsk.ScalingFilter.TRILINEAR if gs > scale_of(self) else Gsk.ScalingFilter.LINEAR
+            snapshot.append_scaled_texture(texture, filt, Graphene.Rect().init(-x * k, -y * k, tw, th))
         snapshot.pop()
+
+    def _device_offset(self):
+        """Décalage logique qui pose l'image sur des pixels entiers de l'écran : à une échelle
+        fractionnaire, une position logique entière tombe entre deux pixels (flou)."""
+        native = self.get_native()
+        if native is None:
+            return 0.0, 0.0
+        ok, p = self.compute_point(native, Graphene.Point().init(0, 0))
+        if not ok:
+            return 0.0, 0.0
+        sx, sy = native.get_surface_transform()
+        scale = scale_of(self)
+        fx = (p.x + sx) * scale
+        fy = (p.y + sy) * scale
+        return (round(fx) - fx) / scale, (round(fy) - fy) / scale
 
     def do_size_allocate(self, width, height, baseline):
         Gtk.Picture.do_size_allocate(self, width, height, baseline)
@@ -156,8 +212,8 @@ class GuestView(Gtk.Picture):
         if not res:
             return None
         x, y = res[-2:]  # (x, y) ou (ok, x, y) selon la version de PyGObject
-        s = scale_of(self)
-        return int(x * s), int(y * s), sx, sy
+        s = self.owner.guest_scale()
+        return int(x * s), int(y * s) + self.nc_top, sx, sy
 
     def _on_event(self, ctrl, event):
         # PyGObject ne sait pas passer un GdkEvent dans ce signal : il arrive à None
@@ -346,6 +402,11 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         self.wid = info["id"]
         self.kind = info.get("kind", "normal")
         self.guest_size = (0, 0)
+        self.dpi = info.get("dpi", 0)  # DPI de la fenêtre dans Windows
+        self.nc = 0               # hauteur de la barre de titre native de Windows (0 : dessinée par l'appli)
+        self.header = None        # barre de titre elementary (option expérimentale)
+        self.frame_mode = None    # "header" : barre du bureau ; "frame" : cadre seul ; None : rien
+        self.header_h = HEADER_FALLBACK_PX
         self.resize_source = 0
         self.last_resize_ms = 0
         self.watched_surface = None
@@ -393,31 +454,82 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
             log.debug("fenêtre %s : surface %s, app_id non posé", self.wid, type(surface).__name__)
 
     def _on_surface_changed(self, *args):
-        # L'invité change d'échelle si c'est la fenêtre de travail ; Windows renvoie
-        # ensuite la nouvelle taille (rect). En attendant, taille hôte recalculée.
-        if self.app.last_active is self:
-            self.app.schedule_update_scale()
-        w, h = self.guest_size
-        if w and h and not self.is_maximized():
-            s = scale_of(self)
-            self.set_default_size(max(1, round(w / s)), max(1, round(h / s)))
+        # Fenêtre passée sur un autre écran : l'écran de travail de l'invité peut changer
+        # (temporisé jusqu'à ce qu'elle soit posée) ; Windows renvoie ensuite le `rect`.
+        self.app.schedule_update_scale()
+        # pas de redimensionnement ici : l'invité garde son échelle jusqu'à ce que la
+        # fenêtre soit posée, et le `rect` suivant donne la taille juste (sinon la fenêtre
+        # gonfle ou rétrécit pendant le glisser entre deux écrans)
         self.view.queue_draw()
 
     def toplevel_surface(self):
         return self.get_surface() if self.kind != "popup" else None
 
+    def guest_scale(self):
+        """Échelle, en termes de l'hôte, à laquelle Windows dessine cette fenêtre.
+        Ce n'est pas forcément celle de l'écran Linux où elle se trouve : Windows ne
+        change d'échelle qu'une fois la fenêtre posée, et chaque fenêtre suit à son rythme."""
+        return guest_scale_on(self.app, self.dpi, self if self.get_realized() else None)
+
     def update(self, info):
         if "title" in info:
             self.set_title(info["title"] or "Vasistas")
+        if "nc" in info:
+            self._apply_caption(info["nc"], info.get("rect"))
+        if "dpi" in info and info["dpi"]:
+            self.dpi = info["dpi"]
+            self.view.queue_draw()
         if "rect" in info:
             _, _, w, h = info["rect"]
             self.guest_size = (w, h)
             if not self.is_maximized():
-                s = scale_of(self) if self.get_realized() else self.app.scale
-                self.set_default_size(max(1, round(w / s)), max(1, round(h / s)))
+                s = self.guest_scale()
+                self.set_default_size(max(1, round(w / s)), self._host_height(h, s))
             elif self.get_realized():
                 # fenêtre hôte agrandie : c'est elle qui impose sa taille à l'invité
                 self.on_view_resized(*self.view.alloc)
+
+    def _host_height(self, guest_h, s):
+        """Hauteur de la fenêtre hôte pour une fenêtre invité de `guest_h` pixels : sans la
+        barre native de Windows, avec celle de Linux."""
+        eff = self.view.nc_top
+        return max(1, round((guest_h - eff) / s) + (self.header_h if self.frame_mode == "header" else 0))
+
+    def _apply_caption(self, nc, rect=None):
+        """Approche dynamique : la barre de titre d'une fenêtre est remplacée par celle du bureau
+        seulement si Windows la dessine lui-même (nc > 0) et si l'option est active. Le test se
+        refait à chaque changement annoncé par l'agent (une appli peut passer en barre à elle)."""
+        self.nc = nc if self.kind != "popup" else 0
+        enabled = self.app.native_titlebar() and self.kind != "popup"
+        # barre de Windows remplacée par celle du bureau, ou (barre dessinée par l'appli : Office,
+        # Explorateur, Edge…) cadre du bureau seul : coins arrondis, bordure et ombre
+        mode = None if not enabled else "header" if self.nc >= MIN_NATIVE_CAPTION_PX else "frame"
+        if mode != self.frame_mode:
+            self.frame_mode = mode
+            if mode == "header":
+                self.header = Gtk.HeaderBar()
+                self.set_titlebar(self.header)
+                self.set_decorated(True)
+                self.header_h = max(HEADER_FALLBACK_PX // 2, self.header.measure(Gtk.Orientation.VERTICAL, -1)[1])
+            elif mode == "frame":
+                # une « barre » sans hauteur : GTK garde le cadre (ombre, coins) sans rien dessiner
+                self.header = None
+                self.set_titlebar(Gtk.Box())
+                self.set_decorated(True)
+            else:
+                self.header = None
+                self.set_titlebar(None)
+                self.set_decorated(False)
+        want = mode == "header"
+        if mode == "frame":
+            self.add_css_class("vasistas-frame")
+        else:
+            self.remove_css_class("vasistas-frame")
+        self.view.nc_top = self.nc if want else 0
+        self.view.queue_draw()
+        if rect and self.get_realized() and not self.is_maximized():
+            s = self.guest_scale()
+            self.set_default_size(max(1, round(rect[2] / s)), self._host_height(rect[3], s))
 
     def _on_map_size(self, win):
         self.map_time = GLib.get_monotonic_time() // 1000
@@ -433,12 +545,13 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         if GLib.get_monotonic_time() // 1000 - self.map_time > MAP_GRACE_MS:
             return False
         gw, gh = self.guest_size
-        s = scale_of(self)
-        if not gw or not gh or (abs(round(width * s) - gw) <= SIZE_TOLERANCE_PX
-                                and abs(round(height * s) - gh) <= SIZE_TOLERANCE_PX):
+        gh -= self.view.nc_top
+        s = self.guest_scale()
+        if not gw or gh <= 0 or (abs(round(width * s) - gw) <= SIZE_TOLERANCE_PX
+                                 and abs(round(height * s) - gh) <= SIZE_TOLERANCE_PX):
             return False
         self.size_fixes += 1
-        lw, lh = max(1, round(gw / s)), max(1, round(gh / s))
+        lw, lh = max(1, round(gw / s)), self._host_height(gh + self.view.nc_top, s)
         log.info("fenêtre %s : %dx%d imposé par le compositeur, retour à %dx%d", self.wid, width, height, lw, lh)
 
         def fix():
@@ -466,8 +579,8 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         self.resize_source = 0
         self.last_resize_ms = GLib.get_monotonic_time() // 1000
         w, h = self.view.alloc
-        s = scale_of(self)
-        pw, ph = round(w * s), round(h * s)
+        s = self.guest_scale()
+        pw, ph = round(w * s), round(h * s) + self.view.nc_top
         gw, gh = self.guest_size
         if abs(pw - gw) > SIZE_TOLERANCE_PX or abs(ph - gh) > SIZE_TOLERANCE_PX:
             # petite taille : trace pour retrouver qui rétrécit les fenêtres (Word à 400x248)
@@ -517,6 +630,7 @@ class GuestPopup(Gtk.Popover):
         self.wid = info["id"]
         self.parent_origin = parent_origin  # coin de la fenêtre parente, pixels invité
         self.rect = info["rect"]
+        self.dpi = info.get("dpi", 0)
         self.parent_view = parent_view
         self.add_css_class("vasistas")
         self.set_autohide(False)
@@ -542,9 +656,17 @@ class GuestPopup(Gtk.Popover):
     def on_view_resized(self, width, height):
         pass
 
+    def guest_scale(self):
+        if self.dpi:
+            return guest_scale_on(self.app, self.dpi,
+                                  self.parent_view if self.parent_view.get_realized() else None)
+        return self.parent_view.owner.guest_scale()
+
     def update(self, info):
-        if "rect" in info:
-            self.rect = info["rect"]
+        if "dpi" in info and info["dpi"]:
+            self.dpi = info["dpi"]
+        if "rect" in info or "dpi" in info:
+            self.rect = info.get("rect", self.rect)
             self._place()
 
     def set_parent_origin(self, origin):
@@ -554,8 +676,8 @@ class GuestPopup(Gtk.Popover):
     def _place(self):
         x, y, w, h = self.rect
         ox, oy = self.parent_origin
-        # échelle de l'écran où se trouve la fenêtre parente
-        s = scale_of(self.parent_view) if self.parent_view.get_realized() else self.app.scale
+        # échelle à laquelle Windows dessine le menu
+        s = self.guest_scale()
         lw, lh = max(1, round(w / s)), max(1, round(h / s))
         self.view.set_size_request(lw, lh)
         rect = Gdk.Rectangle()
@@ -573,6 +695,14 @@ class GuestPopup(Gtk.Popover):
 
 CSS = b"""
 window.vasistas { background: black; }
+/* cadre seul : coins arrondis et ombre douce, sans lisere */
+window.vasistas-frame.csd, window.vasistas-frame.csd decoration {
+    border: none; outline: none; border-radius: 9px; overflow: hidden;
+    box-shadow: 0 1px 4px 0 alpha(black, 0.3), 0 4px 10px 0 alpha(black, 0.2);
+}
+window.vasistas-frame, window.vasistas-frame.csd decoration { background: transparent; }
+window.vasistas-frame.csd.maximized, window.vasistas-frame.csd.fullscreen,
+window.vasistas-frame.csd.tiled { border-radius: 0; box-shadow: none; }
 popover.vasistas { background: none; padding: 0; margin: 0; box-shadow: none; }
 popover.vasistas > contents {
     padding: 0; margin: 0; border: none; border-radius: 0;

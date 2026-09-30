@@ -75,6 +75,8 @@ namespace Vasistas.Agent
         public const uint GW_OWNER = 4, GA_ROOT = 2, GA_ROOTOWNER = 3;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14, DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         public const int DWMWCP_DONOTROUND = 1;
+        public const int DWMWA_BORDER_COLOR = 34;
+        public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
         public const uint PW_RENDERFULLCONTENT = 2;
         public const int SRCCOPY = 0x00CC0020, CAPTUREBLT = 0x40000000;
         public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10, SWP_SHOWWINDOW = 0x40;
@@ -114,6 +116,8 @@ namespace Vasistas.Agent
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
         [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
         [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT pt);
+        [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+        [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hwnd, ref POINT pt);
         [DllImport("user32.dll")] public static extern bool GetCursorInfo(ref CURSORINFO info);
         [DllImport("user32.dll")] public static extern IntPtr LoadCursor(IntPtr hInstance, IntPtr name);
         [DllImport("user32.dll")] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
@@ -123,6 +127,7 @@ namespace Vasistas.Agent
         [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
         [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
+        [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern IntPtr CreateWindowEx(uint exStyle, string cls, string name, uint style, int x, int y, int w, int h,
@@ -191,6 +196,21 @@ namespace Vasistas.Agent
                 return r;
             GetWindowRect(h, out r);
             return r;
+        }
+
+        /// <summary>
+        /// Hauteur de la barre de titre dessinée par Windows (zone non cliente au-dessus de la zone
+        /// cliente), en pixels. 0 si l'application dessine elle-même sa barre (Office, WinUI, Edge :
+        /// la zone cliente couvre alors toute la fenêtre) ou si elle n'a pas de légende.
+        /// </summary>
+        public static int NativeCaption(IntPtr h)
+        {
+            if ((Style(h) & 0x00C00000) != 0x00C00000) return 0; // WS_CAPTION
+            if (!GetClientRect(h, out RECT c)) return 0;
+            var pt = new POINT { X = 0, Y = 0 };
+            if (!ClientToScreen(h, ref pt)) return 0;
+            int nc = pt.Y - Bounds(h).Top;
+            return nc >= 16 && nc < 200 ? nc : 0;
         }
 
         /// <summary>Premier plan forcé, en s'attachant au fil de la fenêtre active.</summary>
