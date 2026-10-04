@@ -82,6 +82,11 @@ class BalloonManager:
                 actual = self._qmp("query-balloon")["actual"]
                 # le total vu par Windows ne baisse pas avec le ballon ; « disponible » oui
                 used = s["stat-total-memory"] - s["stat-available-memory"] - (self.max - actual)
+                if used <= 0 or actual > self.max:
+                    # VM relancée avec une autre taille, ou statistiques d'avant le démarrage :
+                    # on relit la configuration au prochain passage au lieu de reprendre de la mémoire
+                    self.path = None
+                    return
                 target = max(MIN_TARGET, used + max(MARGIN_MIN, int(used * MARGIN_RATIO)))
                 target = min(self.max, target)
                 if time.monotonic() < self.boost_until:
