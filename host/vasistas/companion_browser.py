@@ -1,15 +1,17 @@
-"""Page « Navigateur » de l'application compagnon : l'extension Chrome du projet m365-linux.
+"""Page « Navigateur » de l'application compagnon, si Lucarne est installé.
 
-L'extension renvoie les documents Microsoft 365 cliqués dans Chrome vers une appli : en ligne
-(appli Microsoft 365 du bureau) ou Office de la VM. Les réglages sont ceux de m365-linux
-(~/.config/m365-linux/config.json, clé `target` par appli), partagés avec la fenêtre de
-l'extension et l'appli Réglages Microsoft 365.
+Lucarne (projet séparé) ouvre les services web Microsoft 365 dans des fenêtres du bureau ; son
+extension Chrome renvoie les documents cliqués soit vers ces fenêtres, soit vers Office de la
+VM. Cette page ne fait que piloter ce choix. Les deux projets ne partagent aucun code : Vasistas
+passe par la commande `lucarne` (`status`, `config get`, `config set <appli> target vm|web`),
+cherchée dans le PATH ou donnée par VASISTAS_LUCARNE. Sans elle, la page n'apparaît pas.
 """
 
 import json
 import os
+import shlex
+import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import gi
@@ -20,42 +22,34 @@ from gi.repository import Granite, Gtk  # noqa: E402
 
 from .companion_common import Page, dim, row  # noqa: E402
 
-def _m365_dir():
-    """Dossier du projet m365-linux : VASISTAS_M365, config.json « m365_linux_dir », ou installé
-    dans ~/.local/share/m365-linux. Sans lui, la page n'apparaît pas."""
-    if os.environ.get("VASISTAS_M365"):
-        return Path(os.environ["VASISTAS_M365"])
-    try:
-        from .vm import load_config
-        if load_config().get("m365_linux_dir"):
-            return Path(load_config()["m365_linux_dir"]).expanduser()
-    except (OSError, ValueError):
-        pass
-    return Path.home() / ".local/share/m365-linux"
-
-
-M365 = _m365_dir()
-EXT_ID = "igknaiiijofdhmongnogaielfncjnnlc"
-LINKS_LOG = Path.home() / ".cache/m365-linux/links.log"
 CHOICES = [("vm", "Windows (Vasistas)"), ("web", "En ligne")]
 
 
-def _config_module():
-    sys.path.insert(0, str(M365 / "bin"))
-    try:
-        import m365_config
-        return m365_config
-    except ImportError:
+def _lucarne():
+    if os.environ.get("VASISTAS_LUCARNE"):
+        return shlex.split(os.environ["VASISTAS_LUCARNE"])
+    found = shutil.which("lucarne") or shutil.which("lucarne", path=str(Path.home() / ".local/bin"))
+    return [found] if found else None
+
+
+def lucarne(*args):
+    """Sortie JSON d'une commande `lucarne`, ou None (absent, erreur)."""
+    cmd = _lucarne()
+    if not cmd:
         return None
-    finally:
-        sys.path.pop(0)
+    try:
+        out = subprocess.run(cmd + list(args), capture_output=True, text=True, timeout=10, check=True).stdout
+        return json.loads(out) if out.strip() else {}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
 
 
 def available():
-    return (M365 / "extension" / "manifest.json").exists() and _config_module() is not None
+    status = lucarne("status")
+    return bool(status and status.get("format") == 1 and status.get("extension", {}).get("path"))
 
 
-def extension_state():
+def extension_state(ext_id):
     """(chargée, version) d'après les préférences de Chrome ; version None si Chrome ne la note pas
     (extension non empaquetée : relue sur le disque à chaque rechargement)."""
     for name in ("Secure Preferences", "Preferences"):
@@ -63,7 +57,7 @@ def extension_state():
             prefs = json.loads((Path.home() / ".config/google-chrome/Default" / name).read_text())
         except (OSError, ValueError):
             continue
-        e = prefs.get("extensions", {}).get("settings", {}).get(EXT_ID)
+        e = prefs.get("extensions", {}).get("settings", {}).get(ext_id)
         if e:
             return True, e.get("manifest", {}).get("version")
     return False, None
@@ -77,14 +71,17 @@ class BrowserPage(Page):
                          "Documents Word, Excel et PowerPoint cliqués dans Chrome : ouverts dans Office "
                          "de Windows ou en ligne.")
         self.win = win
-        cfg_mod = _config_module()
+        status = lucarne("status") or {}
+        ext = status.get("extension", {})
+        self.ext_id = ext.get("id")
+        self.links_log = Path(status.get("linksLog", Path.home() / ".cache/lucarne/links.log"))
         box = self.box
 
-        loaded, version = extension_state()
-        want = json.loads((M365 / "extension" / "manifest.json").read_text()).get("version")
+        loaded, version = extension_state(self.ext_id)
+        want = ext.get("version")
         state = Gtk.Label(xalign=0, wrap=True, hexpand=True)
         if not loaded:
-            state.set_label("Extension « Microsoft 365 pour elementary » pas encore chargée dans Chrome.")
+            state.set_label("Extension « Lucarne » pas encore chargée dans Chrome.")
         elif version and version != want:
             state.set_label(f"Extension chargée en version {version} : rechargez-la pour passer à la {want}.")
         else:
@@ -97,24 +94,26 @@ class BrowserPage(Page):
         top.append(btn)
         box.append(top)
         box.append(dim(f"Première fois : mode développeur, « Charger l'extension non empaquetée », dossier "
-                       f"{M365 / 'extension'}. Après une mise à jour : bouton ⟳ de l'extension."))
+                       f"{ext.get('path')}. Après une mise à jour : bouton ⟳ de l'extension."))
 
         box.append(Granite.HeaderLabel.new("Ouvrir les documents dans"))
         lb = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         lb.add_css_class("rich-list")
         lb.add_css_class("card")
         lb.add_css_class("rounded")
-        config = cfg_mod.load()
-        for app in cfg_mod.VM_APPS:
-            name = cfg_mod.APPS[app][0]
+        config = (lucarne("config", "get") or {}).get("apps", {})
+        for app in status.get("vmApps", {}):
+            name = status.get("apps", {}).get(app, app)
             keys = [k for k, _ in CHOICES]
             drop = Gtk.DropDown.new_from_strings([t for _, t in CHOICES])
-            cur = config["apps"][app].get("target", "web")
+            cur = config.get(app, {}).get("target", "web")
             drop.set_selected(keys.index(cur) if cur in keys else 1)
 
             def on(d, _p, app=app, keys=keys):
-                cfg_mod.set_value(app, "target", keys[d.get_selected()])
-                self.win.notify("Réglage enregistré, l'extension le reçoit tout de suite")
+                if lucarne("config", "set", app, "target", keys[d.get_selected()]) is None:
+                    self.win.notify("Lucarne n'a pas pu enregistrer le réglage")
+                else:
+                    self.win.notify("Réglage enregistré, l'extension le reçoit tout de suite")
             drop.connect("notify::selected", on)
             sub = "Outlook de bureau s'ouvre sans le message cliqué" if app == "outlook" else ""
             r = row(name, sub, drop)
@@ -133,7 +132,7 @@ class BrowserPage(Page):
 
     def show_log(self):
         try:
-            lines = LINKS_LOG.read_text().splitlines()[-5:]
+            lines = self.links_log.read_text().splitlines()[-5:]
         except OSError:
             lines = []
         out = []
@@ -145,5 +144,5 @@ class BrowserPage(Page):
         self.log.set_label("\n".join(out) or "Aucun lien pour l'instant.")
 
     def open_extensions(self):
-        subprocess.Popen(["google-chrome", "chrome://extensions/?id=" + EXT_ID], start_new_session=True,
+        subprocess.Popen(["google-chrome", "chrome://extensions/?id=" + (self.ext_id or "")], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

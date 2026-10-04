@@ -86,8 +86,8 @@ def test_types_mime():
 
 def test_designation_par_defaut_puis_retour_a_l_application_d_avant(env):
     (env / "mimeapps.list").write_text(
-        f"[Default Applications]\n{WORD_MIME}=m365-word.desktop\n\n"
-        f"[Added Associations]\n{WORD_MIME}=m365-word.desktop;\n")
+        f"[Default Applications]\n{WORD_MIME}=lucarne-word.desktop\n\n"
+        f"[Added Associations]\n{WORD_MIME}=lucarne-word.desktop;\n")
     files.apply()
     kf = _mimeapps(env)
     word = desktop.app_desktop_id("winword") + ".desktop"
@@ -99,11 +99,11 @@ def test_designation_par_defaut_puis_retour_a_l_application_d_avant(env):
     assert WORD_MIME + ";" in launcher
     cfg = json.loads((env / "data/config.json").read_text())
     assert cfg["open_with"]["docx"] == "winword"
-    assert cfg["open_with_previous"][WORD_MIME] == "m365-word.desktop"
+    assert cfg["open_with_previous"][WORD_MIME] == "lucarne-word.desktop"
 
     files.set_designation("docx", None)
     kf = _mimeapps(env)
-    assert kf.get_string("Default Applications", WORD_MIME) == "m365-word.desktop;"
+    assert kf.get_string("Default Applications", WORD_MIME) == "lucarne-word.desktop;"
     assert word not in kf.get_string("Added Associations", WORD_MIME)
     assert WORD_MIME not in (desktop.APPS_DIR / word).read_text()
     assert WORD_MIME not in json.loads((env / "data/config.json").read_text())["open_with_previous"]

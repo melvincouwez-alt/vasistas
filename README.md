@@ -147,6 +147,21 @@ vasistas exec 'Get-Process'            # a PowerShell script inside Windows
 vasistas companion                     # the companion app
 ```
 
+## Working with Lucarne
+
+[Lucarne](https://github.com/melvincouwez-alt/lucarne) is a separate project that opens the
+Microsoft 365 web apps in desktop windows. The two share no code and work fine alone. When both
+are installed, they talk through their commands only, looked up in `PATH` when needed:
+
+- Lucarne opens a clicked SharePoint or OneDrive document in Office inside the VM by running
+  `vasistas launch "ms-word:ofe|u|<file address>"`, `vasistas launch-app <id> [URL]` or
+  `vasistas open <file>`.
+- The companion app shows a "Browser" page when the `lucarne` command exists. It reads
+  `lucarne status` and `lucarne config get`, and writes the choice with
+  `lucarne config set <app> target vm|web`. `VASISTAS_LUCARNE` overrides the command.
+- Launchers for Office in the VM use Lucarne's `lucarne-<app>` icons when the icon theme has
+  them, otherwise the icons taken from Windows.
+
 ## Development
 
 The host is written in Python with GTK 4 and Granite (`host/vasistas`), the Windows agent in

@@ -166,12 +166,12 @@ def _refresh_caches():
         pass
 
 
-# icônes dessinées au style elementary (projet m365-linux, série B) : prioritaires sur
+# icônes dessinées au style elementary (projet Lucarne, s'il est installé) : prioritaires sur
 # l'icône extraite de Windows ; sinon une icône du thème au nom de l'application
 NATIVE_ICONS = {
-    "winword": "m365-word", "excel": "m365-excel", "powerpnt": "m365-powerpoint",
-    "outlook": "m365-outlook", "pbidesktop": "m365-powerbi", "onenote": "m365-onenote",
-    "msteams": "m365-teams",
+    "winword": "lucarne-word", "excel": "lucarne-excel", "powerpnt": "lucarne-powerpoint",
+    "outlook": "lucarne-outlook", "pbidesktop": "lucarne-powerbi", "onenote": "lucarne-onenote",
+    "msteams": "lucarne-teams",
 }
 
 
