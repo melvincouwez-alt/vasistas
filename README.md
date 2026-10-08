@@ -197,11 +197,13 @@ C# for .NET Framework 4.8 (`guest/Vasistas.Agent`, built with `dotnet build -c R
 Vasistas is released under the MIT License (see [LICENSE](LICENSE)).
 
 It includes [pycdlib](https://github.com/clalancette/pycdlib) (LGPL 2.1, in `host/vendor`) to
-build the setup CD, and the Windows agent embeds the UI Automation interop types of
-[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) (MIT) to
-read Windows notifications and notification area icons.
-The agent also embeds the official Windows build of [zstd](https://github.com/facebook/zstd)
-1.5.7 (`libzstd.dll`, BSD) to compress window tiles.
+build the setup CD. The Windows agent embeds the UI Automation interop types of
+[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) (MIT) and the
+official Windows build of [zstd](https://github.com/facebook/zstd) 1.5.7 (`libzstd.dll`, BSD).
+The patches in `patches/` modify QEMU and keep its license (GPL 2.0 or later);
+`guest/viogpudo/vsync.patch` modifies the virtio-win display driver and keeps its license
+(BSD 3-Clause). License texts and details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Windows, Office, Power BI and the other software mentioned belong to their publishers. Vasistas
-does not ship any Microsoft software or license; it downloads the official installers.
+does not ship any Microsoft software or license; it downloads the official installers. Vasistas
+is an independent project, not affiliated with or endorsed by Microsoft.

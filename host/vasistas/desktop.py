@@ -162,7 +162,7 @@ def apply_launcher_options():
 
 
 def install_icons():
-    """Icône de Vasistas (logo Windows au carreau basculé), une par taille."""
+    """Icône de Vasistas (fenêtre à vasistas, imposte basculée), une par taille."""
     for src in ICONS_SRC.glob(f"*/apps/{APP_ID}.svg"):
         dest = ICONS_DIR / src.relative_to(ICONS_SRC)
         dest.parent.mkdir(parents=True, exist_ok=True)

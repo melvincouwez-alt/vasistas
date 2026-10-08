@@ -1,3 +1,7 @@
+SPDX-License-Identifier: BSD-3-Clause
+Modifies viogpudo from virtio-win (https://github.com/virtio-win/kvm-guest-drivers-windows),
+licensed under the BSD 3-Clause License; see THIRD_PARTY_NOTICES.md.
+
 diff --git a/viogpu/viogpudo/driver.cpp b/viogpu/viogpudo/driver.cpp
 index 33f18c78..ec3cbe27 100644
 --- a/viogpu/viogpudo/driver.cpp

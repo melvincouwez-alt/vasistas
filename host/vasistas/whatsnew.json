@@ -1,4 +1,14 @@
 {
+  "0.9.1": {
+    "fr": [
+      "Nouvelle icône : une fenêtre à vasistas dont l'imposte s'ouvre, à la place du dessin inspiré du logo Windows.",
+      "Licences des composants tiers (zstd, Interop.UIAutomationClient, virtio-win, pycdlib) réunies dans THIRD_PARTY_NOTICES.md et livrées avec Vasistas."
+    ],
+    "en": [
+      "New icon: a window whose top pane tilts open, replacing the design based on the Windows logo.",
+      "Licenses of third-party components (zstd, Interop.UIAutomationClient, virtio-win, pycdlib) are gathered in THIRD_PARTY_NOTICES.md and shipped with Vasistas."
+    ]
+  },
   "0.9.0": {
     "fr": [
       "Vasistas 0.9 (bêta) réunit tout le travail fait depuis la 0.5.2 : application entièrement redessinée, pages principales dans la barre de titre, le reste dans le menu.",

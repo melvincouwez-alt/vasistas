@@ -1,3 +1,7 @@
+SPDX-License-Identifier: GPL-2.0-or-later
+Modifies QEMU (https://www.qemu.org), licensed under the GNU GPL version 2 or later.
+This patch is distributed under the same license, not under the MIT License of Vasistas.
+
 --- a/ui/qemu-pixman.c
 +++ b/ui/qemu-pixman.c
 @@ -279,7 +279,12 @@
