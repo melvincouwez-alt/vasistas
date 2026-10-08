@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from vasistas import control  # noqa: E402
+from vasistas import control, vm  # noqa: E402
 
 EXE = Path(__file__).resolve().parents[2] / "guest/Vasistas.Agent/bin/Release/net48/Vasistas.Agent.exe"
 DIR = r"C:\Program Files\Vasistas\Agent"
@@ -55,6 +55,15 @@ if (-not (Get-Process Vasistas.Agent -ErrorAction SilentlyContinue)) {{ Start-Pr
         f"'déposé : ' + (Get-Item \"$d\\Vasistas.Agent.exe.new\").Length + ' octets'"
     )
     print(out.strip())
+    # boot.ps1 recopie l'agent du CD de partage à chaque ouverture de session : sans ce CD
+    # refait, le prochain redémarrage de Windows remettrait l'ancien agent
+    vm.build_share(install=False)
+    q = vm.Qmp(vm.QMP)
+    try:
+        q.execute("blockdev-change-medium", {"device": "share", "filename": str(vm.SHARE), "format": "raw"})
+    finally:
+        q.close()
+    print("CD de partage refait")
 
 
 if __name__ == "__main__":

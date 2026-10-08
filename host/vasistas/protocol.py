@@ -4,6 +4,11 @@ import json
 import struct
 import zlib
 
+try:
+    from compression import zstd  # Python 3.14
+except ImportError:
+    zstd = None
+
 VERSION = 1
 
 T_JSON = 1
@@ -12,9 +17,15 @@ T_TILE = 2
 TILE_HEADER = struct.Struct("<IHHHHB")
 ENC_RAW = 0
 ENC_DEFLATE = 1
+ENC_ZSTD = 2
 
 MAX_FRAME = 64 * 1024 * 1024
 MAGIC = b"VS"
+
+
+def hello(**extra) -> dict:
+    """hello de l'hôte ; zstd : l'invité peut compresser ses tuiles en zstd."""
+    return {"t": "hello", "version": VERSION, "zstd": zstd is not None, **extra}
 
 
 def pack_json(msg: dict) -> bytes:
@@ -33,8 +44,10 @@ def pack_tile(wid: int, x: int, y: int, w: int, h: int, bgra: bytes, compress=Tr
 
 def unpack_tile(payload: bytes):
     wid, x, y, w, h, enc = TILE_HEADER.unpack_from(payload)
-    data = payload[TILE_HEADER.size:]
-    if enc == ENC_DEFLATE:
+    data = memoryview(payload)[TILE_HEADER.size:]  # sans copie
+    if enc == ENC_ZSTD:
+        data = zstd.decompress(data)
+    elif enc == ENC_DEFLATE:
         data = zlib.decompress(data, wbits=-15)
     if len(data) != w * h * 4:
         raise ValueError(f"tuile {w}x{h} : {len(data)} octets")
@@ -71,7 +84,7 @@ class FrameReader:
                 del self.buf[:2]
                 continue
             self._fill(6 + length)
-            body = bytes(self.buf[7:6 + length])
+            body = self.buf[7:6 + length]  # une seule copie (bytearray)
             del self.buf[:6 + length]
             if ftype == T_JSON:
                 try:

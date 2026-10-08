@@ -2,9 +2,10 @@
 
 L'icône extraite de l'exécutable est calée dans le gabarit du thème (carré de 104 px sur
 128, légèrement plus bas que le centre, comme les icônes système), avec une ombre douce,
-et reçoit l'emblème Vasistas en bas à droite à partir de 32 px.
+et reçoit l'emblème Vasistas en bas à droite à partir de 32 px (réglage launcher_emblem).
 """
 
+import functools
 import math
 from pathlib import Path
 
@@ -13,7 +14,7 @@ import gi
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gdk, GdkPixbuf, GLib  # noqa: E402
+from gi.repository import GdkPixbuf  # noqa: E402
 
 SIZES = (16, 24, 32, 48, 64, 128, 256)
 BADGE_MIN_SIZE = 32
@@ -85,10 +86,24 @@ def _paint_scaled(cr, surf, src_rect, dst_x, dst_y, dst_side):
     cr.restore()
 
 
+@functools.lru_cache(maxsize=2)
+def _source(png: bytes):
+    """Surface et zone utile d'une icône : décodées une fois pour ses sept tailles (boucles
+    pixel par pixel en Python). Lue seulement ensuite, jamais modifiée."""
+    src = _surface_from_pixbuf(_pixbuf_from_png(png))
+    return src, _trim(src)
+
+
+@functools.lru_cache(maxsize=None)
+def _emblem(px: int):
+    """Emblème Vasistas rendu à `px` x 2, et sa zone utile : le même pour toutes les applications."""
+    esurf = _surface_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_size(str(EMBLEM), px * 2, px * 2))
+    return esurf, _trim(esurf)
+
+
 def compose(png: bytes, size: int, with_badge=True) -> bytes:
     """Icône elementary de `size` px, en PNG."""
-    src = _surface_from_pixbuf(_pixbuf_from_png(png))
-    rect = _trim(src)
+    src, rect = _source(png)
     k = size / 128
     out = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
     cr = cairo.Context(out)
@@ -111,15 +126,16 @@ def compose(png: bytes, size: int, with_badge=True) -> bytes:
     return _png(out)
 
 
-def compose_native(svg: Path, size: int) -> bytes:
+def compose_native(svg: Path, size: int, with_badge=True) -> bytes:
     """Icône déjà au style elementary (SVG d'un thème) : rendue telle quelle à `size` px,
-    avec l'emblème Vasistas."""
+    avec l'emblème Vasistas (sauf with_badge faux : réglage launcher_emblem)."""
     out = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
     cr = cairo.Context(out)
     pb = GdkPixbuf.Pixbuf.new_from_file_at_size(str(svg), size, size)
     cr.set_source_surface(_surface_from_pixbuf(pb), (size - pb.get_width()) / 2, (size - pb.get_height()) / 2)
     cr.paint()
-    _paint_badge(cr, size)
+    if with_badge:
+        _paint_badge(cr, size)
     return _png(out)
 
 
@@ -127,13 +143,11 @@ def _paint_badge(cr, size):
     k = size / 128
     if size >= BADGE_MIN_SIZE and EMBLEM.exists():
         bx2, by2, bside = BADGE[0] * k, BADGE[1] * k, BADGE[2] * k
-        px = max(1, round(bside))
-        emblem = GdkPixbuf.Pixbuf.new_from_file_at_size(str(EMBLEM), px * 2, px * 2)
-        esurf = _surface_from_pixbuf(emblem)
+        esurf, erect = _emblem(max(1, round(bside)))
         # liseré blanc qui suit la forme de l'emblème : sa silhouette étalée dans
         # toutes les directions, peinte en blanc sous l'emblème
         mask = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
-        _paint_scaled(cairo.Context(mask), esurf, _trim(esurf), bx2, by2, bside)
+        _paint_scaled(cairo.Context(mask), esurf, erect, bx2, by2, bside)
         r = max(1.0, OUTLINE * k)
         cr.save()
         cr.set_source_rgba(1, 1, 1, 1)
@@ -162,12 +176,12 @@ class _Writer:
         return len(data)
 
 
-def install(app_icon_name: str, png: bytes, icons_dir: Path):
+def install(app_icon_name: str, png: bytes, icons_dir: Path, with_badge=True):
     """Écrit l'icône composée à chaque taille dans icons_dir/<n>x<n>/apps/<nom>.png."""
     for size in SIZES:
         path = icons_dir / f"{size}x{size}/apps/{app_icon_name}.png"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(compose(png, size))
+        path.write_bytes(compose(png, size, with_badge))
 
 
 # thèmes où chercher une icône dessinée au style elementary, par ordre de préférence
@@ -191,11 +205,11 @@ def find_native(names) -> dict:
     return {}
 
 
-def install_native(app_icon_name: str, svgs: dict, icons_dir: Path):
+def install_native(app_icon_name: str, svgs: dict, icons_dir: Path, with_badge=True):
     for size, svg in svgs.items():
         path = icons_dir / f"{size}x{size}/apps/{app_icon_name}.png"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(compose_native(svg, size))
+        path.write_bytes(compose_native(svg, size, with_badge))
 
 
 if __name__ == "__main__":

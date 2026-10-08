@@ -16,6 +16,8 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from .i18n import N_, _
+
 OFFICE_PS1 = Path(__file__).resolve().parents[2] / "install" / "guest-scripts" / "office.ps1"
 MARKER = "VASISTAS-RESULT "
 LONG_TIMEOUT_S = 3600
@@ -25,20 +27,20 @@ LONG_TIMEOUT_S = 3600
 # Canaux de mise à jour acceptés par l'ODT (attribut Channel de <Add>) : la « version »
 # d'Office que l'utilisateur choisit. Libellés par produit : channel_choices().
 CHANNELS = {
-    "Current": "Canal actuel",
-    "MonthlyEnterprise": "Mensuel entreprise",
-    "SemiAnnual": "Semestriel",
-    "CurrentPreview": "Canal actuel (préversion)",
-    "BetaChannel": "Insider bêta",
-    "PerpetualVL2024": "Version perpétuelle 2024",
+    "Current": N_("Canal actuel"),
+    "MonthlyEnterprise": N_("Mensuel entreprise"),
+    "SemiAnnual": N_("Semestriel"),
+    "CurrentPreview": N_("Canal actuel (préversion)"),
+    "BetaChannel": N_("Insider bêta"),
+    "PerpetualVL2024": N_("Version perpétuelle 2024"),
 }
 CHANNEL_HINTS = {
-    "Current": "nouveautés chaque mois, dès leur sortie",
-    "MonthlyEnterprise": "nouveautés une fois par mois, à date fixe",
-    "SemiAnnual": "nouveautés deux fois par an, pour les postes à valider",
-    "CurrentPreview": "nouveautés du mois suivant, en avance",
-    "BetaChannel": "préversions pour tester, pas pour travailler",
-    "PerpetualVL2024": "correctifs de sécurité seulement, pas de nouveautés",
+    "Current": N_("nouveautés chaque mois, dès leur sortie"),
+    "MonthlyEnterprise": N_("nouveautés une fois par mois, à date fixe"),
+    "SemiAnnual": N_("nouveautés deux fois par an, pour les postes qui exigent une validation préalable"),
+    "CurrentPreview": N_("nouveautés du mois suivant, en avant-première"),
+    "BetaChannel": N_("préversions destinées aux tests, déconseillées en production"),
+    "PerpetualVL2024": N_("correctifs de sécurité uniquement, sans nouveautés"),
 }
 _M365 = ["Current", "MonthlyEnterprise", "SemiAnnual", "CurrentPreview", "BetaChannel"]
 
@@ -47,36 +49,36 @@ _M365 = ["Current", "MonthlyEnterprise", "SemiAnnual", "CurrentPreview", "BetaCh
 # Office Deployment Tool », 2025) : les offres « Apps for business / enterprise » vendues sans
 # Teams ont leur identifiant EEANoTeams.
 OFFICE_PRODUCTS = [
-    {"key": "business", "label": "Microsoft 365 Business Standard ou Premium",
+    {"key": "business", "label": N_("Microsoft 365 Business Standard ou Premium"),
      "product_id": "O365BusinessRetail", "family": "m365", "channels": _M365, "default_channel": "Current",
-     "note": "Abonnement Microsoft 365 d'entreprise : connexion au compte à la première ouverture."},
+     "note": N_("Abonnement Microsoft 365 d'entreprise : connexion au compte à la première ouverture.")},
     {"key": "business-apps", "label": "Microsoft 365 Apps for business",
      "product_id": "O365BusinessEEANoTeamsRetail", "family": "m365", "channels": _M365,
      "default_channel": "Current",
-     "note": "Abonnement « Apps for business » (sans Teams) : connexion au compte à la première ouverture."},
-    {"key": "enterprise", "label": "Microsoft 365 E3 ou E5 / Office 365 E3 ou E5",
+     "note": N_("Abonnement « Apps for business » (sans Teams) : connexion au compte à la première ouverture.")},
+    {"key": "enterprise", "label": N_("Microsoft 365 E3 ou E5 / Office 365 E3 ou E5"),
      "product_id": "O365ProPlusRetail", "family": "m365", "channels": _M365, "default_channel": "Current",
-     "note": "Abonnement Microsoft 365 d'entreprise : connexion au compte professionnel."},
+     "note": N_("Abonnement Microsoft 365 d'entreprise : connexion au compte professionnel.")},
     {"key": "enterprise-apps", "label": "Microsoft 365 Apps for enterprise",
      "product_id": "O365ProPlusEEANoTeamsRetail", "family": "m365", "channels": _M365,
      "default_channel": "MonthlyEnterprise",
-     "note": "Abonnement « Apps for enterprise » (sans Teams) : connexion au compte professionnel."},
-    {"key": "home", "label": "Microsoft 365 Famille ou Personnel",
+     "note": N_("Abonnement « Apps for enterprise » (sans Teams) : connexion au compte professionnel.")},
+    {"key": "home", "label": N_("Microsoft 365 Famille ou Personnel"),
      "product_id": "O365HomePremRetail", "family": "m365", "channels": ["Current", "CurrentPreview", "BetaChannel"],
      "default_channel": "Current",
-     "note": "Abonnement grand public : connexion au compte Microsoft à la première ouverture."},
-    {"key": "home2024", "label": "Office Famille 2024",
+     "note": N_("Abonnement grand public : connexion au compte Microsoft à la première ouverture.")},
+    {"key": "home2024", "label": N_("Office Famille 2024"),
      "product_id": "Home2024Retail", "family": "2024", "channels": ["Current"], "default_channel": "Current",
-     "channel_labels": {"Current": "Version 2024 (correctifs mensuels)"},
-     "note": "Achat unique : activation avec le compte Microsoft qui a acheté Office."},
-    {"key": "homebusiness2024", "label": "Office Famille et Entreprise 2024",
+     "channel_labels": {"Current": N_("Version 2024 (correctifs mensuels)")},
+     "note": N_("Achat unique : activation avec le compte Microsoft qui a acheté Office.")},
+    {"key": "homebusiness2024", "label": N_("Office Famille et Entreprise 2024"),
      "product_id": "HomeBusiness2024Retail", "family": "2024", "channels": ["Current"], "default_channel": "Current",
-     "channel_labels": {"Current": "Version 2024 (correctifs mensuels)"},
-     "note": "Achat unique : activation avec le compte Microsoft qui a acheté Office."},
-    {"key": "ltsc2024", "label": "Office LTSC Professionnel Plus 2024",
+     "channel_labels": {"Current": N_("Version 2024 (correctifs mensuels)")},
+     "note": N_("Achat unique : activation avec le compte Microsoft qui a acheté Office.")},
+    {"key": "ltsc2024", "label": N_("Office LTSC Professionnel Plus 2024"),
      "product_id": "ProPlus2024Volume", "family": "ltsc2024", "channels": ["PerpetualVL2024"],
      "default_channel": "PerpetualVL2024",
-     "note": "Licence en volume : clé MAK, ou serveur KMS de l'organisation."},
+     "note": N_("Licence en volume : clé MAK, ou serveur KMS de l'organisation.")},
 ]
 PRODUCTS_BY_KEY = {p["key"]: p for p in OFFICE_PRODUCTS}
 
@@ -85,23 +87,24 @@ OFFICE_APPS = [
     {"id": "Word", "label": "Word", "excluded": False},
     {"id": "Excel", "label": "Excel", "excluded": False},
     {"id": "PowerPoint", "label": "PowerPoint", "excluded": False},
-    {"id": "Outlook", "label": "Outlook (classique)", "excluded": False},
-    {"id": "OutlookForWindows", "label": "Nouvel Outlook", "excluded": False},
+    {"id": "Outlook", "label": N_("Outlook (classique)"), "excluded": False},
+    {"id": "OutlookForWindows", "label": N_("Nouvel Outlook"), "excluded": False},
     {"id": "OneNote", "label": "OneNote", "excluded": False},
     {"id": "Access", "label": "Access", "excluded": False},
-    {"id": "Publisher", "label": "Publisher (retiré par Microsoft en octobre 2026)", "excluded": True},
+    {"id": "Publisher", "label": N_("Publisher (retiré par Microsoft en octobre 2026)"), "excluded": True},
     # OneDrive se désigne « Groove » dans l'ODT ; Skype Entreprise, « Lync »
     {"id": "Groove", "label": "OneDrive", "excluded": True},
-    {"id": "Lync", "label": "Skype Entreprise", "excluded": True},
-    {"id": "Teams", "label": "Teams (à installer à part : catalogue des applications)", "excluded": True},
+    {"id": "Lync", "label": N_("Skype Entreprise"), "excluded": True},
+    {"id": "Teams", "label": N_("Teams (à installer séparément depuis la section "
+                                "« Autres applications »)"), "excluded": True},
 ]
 DEFAULT_EXCLUDED = [a["id"] for a in OFFICE_APPS if a["excluded"]]
 
 # Visio et Project : identifiant selon la famille du produit principal
 ADDONS = {
-    "visio": {"label": "Visio Professionnel",
+    "visio": {"label": N_("Visio Professionnel"),
               "ids": {"m365": "VisioProRetail", "2024": "VisioPro2024Retail", "ltsc2024": "VisioPro2024Volume"}},
-    "project": {"label": "Project Professionnel",
+    "project": {"label": N_("Project Professionnel"),
                 "ids": {"m365": "ProjectProRetail", "2024": "ProjectPro2024Retail",
                         "ltsc2024": "ProjectPro2024Volume"}},
 }
@@ -113,41 +116,41 @@ ADDONS = {
 # (VISIO_FALLBACK).
 MATCH_OS = "MatchOS"
 OFFICE_LANGUAGES = [
-    (MATCH_OS, "Langue de Windows", True),
-    ("ar-sa", "Arabe", True), ("bg-bg", "Bulgare", True), ("zh-cn", "Chinois (simplifié)", True),
-    ("zh-tw", "Chinois (traditionnel)", True), ("hr-hr", "Croate", True), ("cs-cz", "Tchèque", True),
-    ("da-dk", "Danois", True), ("nl-nl", "Néerlandais", True), ("en-us", "Anglais (États-Unis)", True),
-    ("en-gb", "Anglais (Royaume-Uni)", True), ("et-ee", "Estonien", True), ("fi-fi", "Finnois", True),
-    ("fr-fr", "Français", True), ("fr-ca", "Français (Canada)", True), ("de-de", "Allemand", True),
-    ("el-gr", "Grec", True), ("he-il", "Hébreu", True), ("hi-in", "Hindi", True), ("hu-hu", "Hongrois", True),
-    ("id-id", "Indonésien", True), ("it-it", "Italien", True), ("ja-jp", "Japonais", True),
-    ("kk-kz", "Kazakh", True), ("ko-kr", "Coréen", True), ("lv-lv", "Letton", True),
-    ("lt-lt", "Lituanien", True), ("ms-my", "Malais", True), ("nb-no", "Norvégien (bokmål)", True),
-    ("nn-no", "Norvégien (nynorsk)", True), ("pl-pl", "Polonais", True),
-    ("pt-pt", "Portugais (Portugal)", True), ("pt-br", "Portugais (Brésil)", True), ("ro-ro", "Roumain", True),
-    ("ru-ru", "Russe", True), ("sr-latn-rs", "Serbe (latin)", True), ("sk-sk", "Slovaque", True),
-    ("sl-si", "Slovène", True), ("es-es", "Espagnol", True), ("es-mx", "Espagnol (Mexique)", True),
-    ("sv-se", "Suédois", True), ("th-th", "Thaï", True), ("tr-tr", "Turc", True), ("uk-ua", "Ukrainien", True),
-    ("vi-vn", "Vietnamien", True),
-    ("af-za", "Afrikaans", False), ("sq-al", "Albanais", False), ("hy-am", "Arménien", False),
-    ("as-in", "Assamais", False), ("az-latn-az", "Azéri (latin)", False), ("eu-es", "Basque", False),
-    ("bn-bd", "Bengali (Bangladesh)", False), ("bn-in", "Bengali (Inde)", False),
-    ("bs-latn-ba", "Bosniaque (latin)", False), ("ca-es", "Catalan", False),
-    ("ca-es-valencia", "Valencien", False), ("si-lk", "Cingalais", False), ("gd-gb", "Gaélique écossais", False),
-    ("gl-es", "Galicien", False), ("cy-gb", "Gallois", False), ("ka-ge", "Géorgien", False),
-    ("gu-in", "Goudjarati", False), ("ha-latn-ng", "Haoussa", False), ("ig-ng", "Igbo", False),
-    ("ga-ie", "Irlandais", False), ("is-is", "Islandais", False), ("kn-in", "Kannada", False),
-    ("rw-rw", "Kinyarwanda", False), ("ky-kg", "Kirghize", False), ("kok-in", "Konkani", False),
-    ("lb-lu", "Luxembourgeois", False), ("mk-mk", "Macédonien", False), ("ml-in", "Malayalam", False),
-    ("mt-mt", "Maltais", False), ("mi-nz", "Maori", False), ("mr-in", "Marathi", False),
-    ("ne-np", "Népalais", False), ("or-in", "Odia", False), ("ur-pk", "Ourdou", False),
-    ("uz-latn-uz", "Ouzbek (latin)", False), ("ps-af", "Pachto", False), ("pa-in", "Pendjabi (gurmukhi)", False),
-    ("fa-ir", "Persan", False), ("rm-ch", "Romanche", False),
-    ("sr-cyrl-rs", "Serbe (cyrillique, Serbie)", False),
-    ("sr-cyrl-ba", "Serbe (cyrillique, Bosnie-Herzégovine)", False), ("nso-za", "Sotho du Nord", False),
-    ("sw-ke", "Swahili", False), ("tt-ru", "Tatar (cyrillique)", False), ("ta-in", "Tamoul", False),
-    ("te-in", "Télougou", False), ("tn-za", "Tswana", False), ("wo-sn", "Wolof", False),
-    ("xh-za", "Xhosa", False), ("yo-ng", "Yoruba", False), ("zu-za", "Zoulou", False),
+    (MATCH_OS, N_("Langue de Windows"), True),
+    ("ar-sa", N_("Arabe"), True), ("bg-bg", N_("Bulgare"), True), ("zh-cn", N_("Chinois (simplifié)"), True),
+    ("zh-tw", N_("Chinois (traditionnel)"), True), ("hr-hr", N_("Croate"), True), ("cs-cz", N_("Tchèque"), True),
+    ("da-dk", N_("Danois"), True), ("nl-nl", N_("Néerlandais"), True), ("en-us", N_("Anglais (États-Unis)"), True),
+    ("en-gb", N_("Anglais (Royaume-Uni)"), True), ("et-ee", N_("Estonien"), True), ("fi-fi", N_("Finnois"), True),
+    ("fr-fr", N_("Français"), True), ("fr-ca", N_("Français (Canada)"), True), ("de-de", N_("Allemand"), True),
+    ("el-gr", N_("Grec"), True), ("he-il", N_("Hébreu"), True), ("hi-in", N_("Hindi"), True), ("hu-hu", N_("Hongrois"), True),
+    ("id-id", N_("Indonésien"), True), ("it-it", N_("Italien"), True), ("ja-jp", N_("Japonais"), True),
+    ("kk-kz", N_("Kazakh"), True), ("ko-kr", N_("Coréen"), True), ("lv-lv", N_("Letton"), True),
+    ("lt-lt", N_("Lituanien"), True), ("ms-my", N_("Malais"), True), ("nb-no", N_("Norvégien (bokmål)"), True),
+    ("nn-no", N_("Norvégien (nynorsk)"), True), ("pl-pl", N_("Polonais"), True),
+    ("pt-pt", N_("Portugais (Portugal)"), True), ("pt-br", N_("Portugais (Brésil)"), True), ("ro-ro", N_("Roumain"), True),
+    ("ru-ru", N_("Russe"), True), ("sr-latn-rs", N_("Serbe (latin)"), True), ("sk-sk", N_("Slovaque"), True),
+    ("sl-si", N_("Slovène"), True), ("es-es", N_("Espagnol"), True), ("es-mx", N_("Espagnol (Mexique)"), True),
+    ("sv-se", N_("Suédois"), True), ("th-th", N_("Thaï"), True), ("tr-tr", N_("Turc"), True), ("uk-ua", N_("Ukrainien"), True),
+    ("vi-vn", N_("Vietnamien"), True),
+    ("af-za", N_("Afrikaans"), False), ("sq-al", N_("Albanais"), False), ("hy-am", N_("Arménien"), False),
+    ("as-in", N_("Assamais"), False), ("az-latn-az", N_("Azéri (latin)"), False), ("eu-es", N_("Basque"), False),
+    ("bn-bd", N_("Bengali (Bangladesh)"), False), ("bn-in", N_("Bengali (Inde)"), False),
+    ("bs-latn-ba", N_("Bosniaque (latin)"), False), ("ca-es", N_("Catalan"), False),
+    ("ca-es-valencia", N_("Valencien"), False), ("si-lk", N_("Cingalais"), False), ("gd-gb", N_("Gaélique écossais"), False),
+    ("gl-es", N_("Galicien"), False), ("cy-gb", N_("Gallois"), False), ("ka-ge", N_("Géorgien"), False),
+    ("gu-in", N_("Goudjarati"), False), ("ha-latn-ng", N_("Haoussa"), False), ("ig-ng", N_("Igbo"), False),
+    ("ga-ie", N_("Irlandais"), False), ("is-is", N_("Islandais"), False), ("kn-in", N_("Kannada"), False),
+    ("rw-rw", N_("Kinyarwanda"), False), ("ky-kg", N_("Kirghize"), False), ("kok-in", N_("Konkani"), False),
+    ("lb-lu", N_("Luxembourgeois"), False), ("mk-mk", N_("Macédonien"), False), ("ml-in", N_("Malayalam"), False),
+    ("mt-mt", N_("Maltais"), False), ("mi-nz", N_("Maori"), False), ("mr-in", N_("Marathi"), False),
+    ("ne-np", N_("Népalais"), False), ("or-in", N_("Odia"), False), ("ur-pk", N_("Ourdou"), False),
+    ("uz-latn-uz", N_("Ouzbek (latin)"), False), ("ps-af", N_("Pachto"), False), ("pa-in", N_("Pendjabi (gurmukhi)"), False),
+    ("fa-ir", N_("Persan"), False), ("rm-ch", N_("Romanche"), False),
+    ("sr-cyrl-rs", N_("Serbe (cyrillique, Serbie)"), False),
+    ("sr-cyrl-ba", N_("Serbe (cyrillique, Bosnie-Herzégovine)"), False), ("nso-za", N_("Sotho du Nord"), False),
+    ("sw-ke", N_("Swahili"), False), ("tt-ru", N_("Tatar (cyrillique)"), False), ("ta-in", N_("Tamoul"), False),
+    ("te-in", N_("Télougou"), False), ("tn-za", N_("Tswana"), False), ("wo-sn", N_("Wolof"), False),
+    ("xh-za", N_("Xhosa"), False), ("yo-ng", N_("Yoruba"), False), ("zu-za", N_("Zoulou"), False),
 ]
 LANGUAGE_NAMES = {code: name for code, name, _ in OFFICE_LANGUAGES}
 FULL_LANGUAGES = {code for code, _, full in OFFICE_LANGUAGES if full}
@@ -182,10 +185,10 @@ def channel_choices(product_key):
     order = [product["default_channel"]] + [c for c in product["channels"] if c != product["default_channel"]]
     out = []
     for c in order:
-        label = labels.get(c, CHANNELS[c])
+        label = _(labels.get(c, CHANNELS[c]))
         if c == product["default_channel"] and len(order) > 1:
-            label += " (conseillé)"
-        out.append((c, label, CHANNEL_HINTS[c]))
+            label = _("{label} (conseillé)", label=label)
+        out.append((c, label, _(CHANNEL_HINTS[c])))
     return out
 
 
@@ -262,31 +265,6 @@ def office_config(product_key, channel=None, languages=None, exclude=None, addon
     return ET.tostring(root, encoding="unicode") + "\n"
 
 
-def office_languages_config(languages=None, proofing=None, channel=None):
-    """Ajoute des langues à un Office déjà installé : modules linguistiques (produit
-    LanguagePack, interface traduite) et langues de vérification (ProofingTools). Sans
-    `channel`, l'ODT garde celui de l'installation."""
-    languages = [l for l in dict.fromkeys(languages or []) if l != MATCH_OS]
-    proofing = [l for l in dict.fromkeys(proofing or []) if l not in languages and l != MATCH_OS]
-    if not languages and not proofing:
-        raise ValueError("aucune langue à ajouter")
-    _check_languages(languages + proofing, primary_required=False)
-    if channel is not None and channel not in CHANNELS:
-        raise ValueError(f"canal inconnu : {channel}")
-    root = ET.Element("Configuration")
-    add = ET.SubElement(root, "Add", {"OfficeClientEdition": "64", "AllowCdnFallback": "True",
-                                      **({"Channel": channel} if channel else {})})
-    for pid, langs in (("LanguagePack", languages), ("ProofingTools", proofing)):
-        if langs:
-            el = ET.SubElement(add, "Product", ID=pid)
-            for lang in langs:
-                ET.SubElement(el, "Language", ID=lang)
-    ET.SubElement(root, "Property", Name="FORCEAPPSHUTDOWN", Value="FALSE")
-    ET.SubElement(root, "Display", Level="None", AcceptEULA="TRUE")
-    ET.indent(root)
-    return ET.tostring(root, encoding="unicode") + "\n"
-
-
 def office_script(config_xml):
     """Script PowerShell complet : télécharge l'ODT, écrit config_xml, lance l'installation."""
     if "\n'@" in config_xml:
@@ -308,7 +286,8 @@ $r = @{ installed = [bool]$c; products = @(if ($c.ProductReleaseIds) { $c.Produc
 
 # -- autres applications (winget) --
 
-CATEGORIES = ["Bureautique", "Données", "PDF", "Création", "Communication", "Développement"]
+CATEGORIES = [N_("Bureautique"), N_("Données"), N_("PDF"), N_("Création"), N_("Communication"),
+              N_("Développement")]
 
 # Identifiants vérifiés avec `winget show --id … -e` (dépôt winget, septembre 2026).
 #
@@ -329,66 +308,68 @@ POWERBI_LANGUAGES = ["ar-SA", "bg-BG", "ca-ES", "cs-CZ", "da-DK", "de-DE", "el-G
                      "pt-PT", "ro-RO", "ru-RU", "sk-SK", "sl-SI", "sr-Cyrl-RS", "sr-Latn-RS", "sv-SE",
                      "th-TH", "tr-TR", "uk-UA", "vi-VN", "zh-CN", "zh-TW"]
 APPS = [
-    {"key": "powerbi", "label": "Power BI Desktop", "category": "Données",
-     "description": "Rapports et tableaux de bord Power BI", "icon": "office-chart-bar", "note": "",
+    {"key": "powerbi", "label": "Power BI Desktop", "category": N_("Données"),
+     "description": N_("Rapports et tableaux de bord Power BI"), "icon": "office-chart-bar", "note": "",
      "variants": [("desktop", "Microsoft.PowerBI", "Power BI Desktop")],
      "locale": {"custom": "LANGUAGE={lang}", "languages": POWERBI_LANGUAGES}},
-    {"key": "powerbi-report-builder", "label": "Power BI Report Builder", "category": "Données",
-     "description": "Rapports paginés Power BI", "icon": "office-chart-bar", "note": "",
+    {"key": "powerbi-report-builder", "label": "Power BI Report Builder", "category": N_("Données"),
+     "description": N_("Rapports paginés Power BI"), "icon": "office-chart-bar", "note": "",
      "variants": [("default", "Microsoft.PowerBIReportBuilder", "Power BI Report Builder")], "locale": None},
-    {"key": "ssms", "label": "SQL Server Management Studio", "category": "Données",
-     "description": "Administration et requêtes SQL Server", "icon": "network-server", "note": "",
+    {"key": "ssms", "label": "SQL Server Management Studio", "category": N_("Données"),
+     "description": N_("Administration et requêtes SQL Server"), "icon": "network-server", "note": "",
      "variants": [("22", "Microsoft.SQLServerManagementStudio.22", "SSMS 22"),
                   ("21", "Microsoft.SQLServerManagementStudio.21", "SSMS 21"),
                   ("20", "Microsoft.SQLServerManagementStudio", "SSMS 20")],
      "locale": {"custom": "--addProductLang {lang}", "languages": VS_LANGUAGES, "variants": ["22", "21"]}},
-    {"key": "tableau", "label": "Tableau", "category": "Données",
-     "description": "Analyse et visualisation de données", "icon": "x-office-spreadsheet", "note": "",
-     "variants": [("desktop", "Tableau.Desktop", "Tableau Desktop (licence Tableau)"),
-                  ("reader", "Tableau.Reader", "Tableau Reader (lecture seule, gratuit)")], "locale": None},
-    {"key": "power-automate", "label": "Power Automate pour le bureau", "category": "Bureautique",
-     "description": "Automatisation des tâches Windows et Office", "icon": "system-run",
-     "note": "Compte Microsoft ou professionnel à la première ouverture.",
-     "variants": [("default", "Microsoft.PowerAutomateDesktop", "Power Automate pour le bureau")], "locale": None},
-    {"key": "notepadpp", "label": "Notepad++", "category": "Bureautique",
-     "description": "Éditeur de texte et de code", "icon": "accessories-text-editor", "note": "",
+    {"key": "tableau", "label": "Tableau", "category": N_("Données"),
+     "description": N_("Analyse et visualisation de données"), "icon": "x-office-spreadsheet", "note": "",
+     "variants": [("desktop", "Tableau.Desktop", N_("Tableau Desktop (licence Tableau)")),
+                  ("reader", "Tableau.Reader", N_("Tableau Reader (lecture seule, gratuit)"))], "locale": None},
+    {"key": "power-automate", "label": N_("Power Automate pour le bureau"), "category": N_("Bureautique"),
+     "description": N_("Automatisation des tâches Windows et Office"), "icon": "system-run",
+     "note": N_("Connexion avec un compte Microsoft ou professionnel à la première ouverture."),
+     "variants": [("default", "Microsoft.PowerAutomateDesktop", N_("Power Automate pour le bureau"))], "locale": None},
+    {"key": "notepadpp", "label": "Notepad++", "category": N_("Bureautique"),
+     "description": N_("Éditeur de texte et de code"), "icon": "accessories-text-editor", "note": "",
      "variants": [("default", "Notepad++.Notepad++", "Notepad++")], "locale": None},
-    {"key": "7zip", "label": "7-Zip", "category": "Bureautique",
-     "description": "Archives 7z, zip, rar dans l'Explorateur", "icon": "package-x-generic", "note": "",
+    {"key": "7zip", "label": "7-Zip", "category": N_("Bureautique"),
+     "description": N_("Gestion des archives 7z, zip et rar dans "
+                       "l'Explorateur de fichiers"), "icon": "package-x-generic", "note": "",
      "variants": [("default", "7zip.7zip", "7-Zip")], "locale": None},
-    {"key": "acrobat", "label": "Adobe Acrobat", "category": "PDF",
-     "description": "Lecture, signature et modification de PDF", "icon": "application-pdf",
-     "note": "Reader est gratuit ; Acrobat Pro demande un abonnement Adobe.",
-     "variants": [("reader64", "Adobe.Acrobat.Reader.64-bit", "Acrobat Reader 64 bits"),
-                  ("reader32", "Adobe.Acrobat.Reader.32-bit", "Acrobat Reader 32 bits (anciens modules)"),
-                  ("pro", "Adobe.Acrobat.Pro", "Acrobat Pro (abonnement)")], "locale": None},
-    {"key": "pdfxchange", "label": "PDF-XChange", "category": "PDF",
-     "description": "Annotation et modification de PDF", "icon": "application-pdf",
-     "note": "Fonctions avancées payantes.",
+    {"key": "acrobat", "label": "Adobe Acrobat", "category": N_("PDF"),
+     "description": N_("Lecture, signature et modification de PDF"), "icon": "application-pdf",
+     "note": N_("Reader est gratuit ; Acrobat Pro nécessite un abonnement Adobe."),
+     "variants": [("reader64", "Adobe.Acrobat.Reader.64-bit", N_("Acrobat Reader 64 bits")),
+                  ("reader32", "Adobe.Acrobat.Reader.32-bit", N_("Acrobat Reader 32 bits (compatible avec les anciens "
+                                                                 "modules)")),
+                  ("pro", "Adobe.Acrobat.Pro", N_("Acrobat Pro (abonnement)"))], "locale": None},
+    {"key": "pdfxchange", "label": "PDF-XChange", "category": N_("PDF"),
+     "description": N_("Annotation et modification de PDF"), "icon": "application-pdf",
+     "note": N_("Fonctions avancées payantes."),
      "variants": [("editor", "TrackerSoftware.PDF-XChangeEditor", "PDF-XChange Editor"),
                   ("pro", "TrackerSoftware.PDF-XChangePRO", "PDF-XChange PRO")], "locale": None},
-    {"key": "creative-cloud", "label": "Adobe Creative Cloud", "category": "Création",
-     "description": "Photoshop, Illustrator, InDesign…", "icon": "applications-graphics",
-     "note": "Abonnement Adobe nécessaire.",
+    {"key": "creative-cloud", "label": "Adobe Creative Cloud", "category": N_("Création"),
+     "description": N_("Photoshop, Illustrator, InDesign…"), "icon": "applications-graphics",
+     "note": N_("Abonnement Adobe nécessaire."),
      "variants": [("default", "Adobe.CreativeCloud", "Adobe Creative Cloud")], "locale": None},
-    {"key": "sketchup", "label": "SketchUp", "category": "Création",
-     "description": "Modélisation 3D", "icon": "applications-graphics", "note": "Abonnement Trimble nécessaire.",
+    {"key": "sketchup", "label": "SketchUp", "category": N_("Création"),
+     "description": N_("Modélisation 3D"), "icon": "applications-graphics", "note": N_("Abonnement Trimble nécessaire."),
      "variants": [("2026", "Trimble.SketchUp.2026", "SketchUp 2026"),
                   ("2025", "Trimble.SketchUp.2025", "SketchUp 2025")], "locale": None},
-    {"key": "design-review", "label": "Autodesk Design Review", "category": "Création",
-     "description": "Lecture et annotation de plans DWF et DWG", "icon": "x-office-drawing", "note": "",
+    {"key": "design-review", "label": "Autodesk Design Review", "category": N_("Création"),
+     "description": N_("Lecture et annotation de plans DWF et DWG"), "icon": "x-office-drawing", "note": "",
      "variants": [("default", "Autodesk.DesignReview", "Autodesk Design Review")], "locale": None},
-    {"key": "teams", "label": "Microsoft Teams", "category": "Communication",
-     "description": "Réunions et conversations d'équipe", "icon": "internet-chat", "note": "",
-     "variants": [("work", "Microsoft.Teams", "Teams (travail ou école)"),
-                  ("free", "Microsoft.Teams.Free", "Teams gratuit (compte personnel)")], "locale": None},
-    {"key": "zoom", "label": "Zoom Workplace", "category": "Communication",
-     "description": "Réunions vidéo", "icon": "camera-web", "note": "",
+    {"key": "teams", "label": "Microsoft Teams", "category": N_("Communication"),
+     "description": N_("Réunions et conversations d'équipe"), "icon": "internet-chat", "note": "",
+     "variants": [("work", "Microsoft.Teams", N_("Teams (travail ou école)")),
+                  ("free", "Microsoft.Teams.Free", N_("Teams gratuit (compte personnel)"))], "locale": None},
+    {"key": "zoom", "label": "Zoom Workplace", "category": N_("Communication"),
+     "description": N_("Réunions vidéo"), "icon": "camera-web", "note": "",
      "variants": [("default", "Zoom.Zoom", "Zoom Workplace")], "locale": None},
-    {"key": "visual-studio", "label": "Visual Studio", "category": "Développement",
-     "description": "Environnement de développement .NET et C++", "icon": "applications-development",
-     "note": "Community : gratuit pour les particuliers et petites équipes ; Professional et "
-             "Enterprise : abonnement.",
+    {"key": "visual-studio", "label": "Visual Studio", "category": N_("Développement"),
+     "description": N_("Environnement de développement .NET et C++"), "icon": "applications-development",
+     "note": N_("Community : gratuit pour les particuliers et les petites équipes ; Professional et Enterprise : sur "
+                "abonnement."),
      "variants": [("community", "Microsoft.VisualStudio.Community", "Community 2026"),
                   ("professional", "Microsoft.VisualStudio.Professional", "Professional 2026"),
                   ("enterprise", "Microsoft.VisualStudio.Enterprise", "Enterprise 2026"),
@@ -405,10 +386,11 @@ APPS_BY_KEY = {a["key"]: a for a in APPS}
 # Codes de retour de winget (doc « winget return codes ») traités comme un succès : paquet
 # déjà présent, ou installé en attente de redémarrage
 WINGET_OK = {
-    0: "installé",
-    -1978335135: "déjà installé",            # 0x8A150061 PACKAGE_ALREADY_INSTALLED
-    -1978334963: "une autre version est installée",  # 0x8A15010D INSTALL_ALREADY_INSTALLED
-    -1978334967: "redémarrage de Windows pour finir",  # 0x8A150109 REBOOT_REQUIRED_TO_FINISH
+    0: N_("installé"),
+    -1978335135: N_("déjà installé"),            # 0x8A150061 PACKAGE_ALREADY_INSTALLED
+    -1978334963: N_("une autre version est installée"),  # 0x8A15010D INSTALL_ALREADY_INSTALLED
+    # 0x8A150109 REBOOT_REQUIRED_TO_FINISH
+    -1978334967: N_("redémarrage de Windows nécessaire pour terminer l'installation"),
 }
 WINGET_NO_APPLICABLE_INSTALLER = -1978335216   # 0x8A150010 : pas d'installateur « machine »
 
@@ -558,7 +540,7 @@ def _run(script, request, timeout):
     parsed = parse_result(res.get("out"))
     if not parsed:
         tail = (res.get("out") or "").strip()[-400:]
-        raise RuntimeError(tail or f"pas de résultat (code {res.get('code')})")
+        raise RuntimeError(tail or _("aucun résultat renvoyé par Windows (code {code})", code=res.get("code")))
     return parsed
 
 
@@ -567,11 +549,6 @@ def install_office(product_key, channel=None, languages=None, exclude=None, addo
     """Installe Office dans Windows (plusieurs minutes). Rend {code, ok, apps, products, version}."""
     xml = office_config(product_key, channel, languages, exclude, addons, shared, pidkey, proofing)
     return _run(office_script(xml), request, LONG_TIMEOUT_S)
-
-
-def add_office_languages(languages=None, proofing=None, request=None):
-    """Ajoute modules linguistiques et langues de vérification à l'Office installé."""
-    return _run(office_script(office_languages_config(languages, proofing)), request, LONG_TIMEOUT_S)
 
 
 # Canal d'une installation existante, d'après l'adresse de son CDN (UpdateChannel ou CDNBaseUrl)
@@ -639,7 +616,7 @@ def status(keys=None, request=None):
 def describe_code(code):
     """Texte d'un code de retour winget, pour l'interface."""
     if code in WINGET_OK:
-        return WINGET_OK[code]
+        return _(WINGET_OK[code])
     if code is None:
-        return "pas de réponse"
-    return f"échec (code {code & 0xFFFFFFFF:#010x})"
+        return _("pas de réponse")
+    return _("échec (code {code})", code=f"{code & 0xFFFFFFFF:#010x}")

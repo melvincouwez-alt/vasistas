@@ -23,13 +23,17 @@ namespace Vasistas.Agent
         uint ownSeq;   // séquence produite par notre propre écriture : pas d'écho vers l'hôte
         long retryAt;
 
+        /// <summary>Prochain essai quand le presse-papiers était verrouillé par une autre application.</summary>
+        public long RetryAt => retryAt;
+
         public ClipboardSync(Action<Dictionary<string, object>> send)
         {
             this.send = send;
             lastSeq = GetClipboardSequenceNumber();
         }
 
-        /// <summary>À appeler souvent : envoie le contenu quand Windows signale une copie.</summary>
+        /// <summary>À chaque tour de la boucle principale (réveillée par WM_CLIPBOARDUPDATE) : envoie
+        /// le contenu quand Windows signale une copie.</summary>
         public void Poll(long now)
         {
             uint seq = GetClipboardSequenceNumber();
@@ -44,6 +48,11 @@ namespace Vasistas.Agent
             catch (ExternalException)
             {
                 retryAt = now + 100; // presse-papiers verrouillé par une autre application
+            }
+            catch (Exception e)
+            {
+                lastSeq = seq; // contenu illisible : pas relu deux fois par seconde
+                Log.Write("presse-papiers : " + e.Message);
             }
         }
 

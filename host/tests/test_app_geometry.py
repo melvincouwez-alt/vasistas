@@ -44,3 +44,41 @@ def test_ancien_cadrage_abandonne_apres_le_delai():
     info = {"rect": [100, 0, 50, 50], "shown_rect": [0, 0, 50, 50],
             "rect_since": time.monotonic() - app.RECT_HOLD_S - 0.01}
     assert VasistasApp._shown_rect(_fake({1: info}), 1) == [100, 0, 50, 50]
+
+
+def test_battement_ralenti_sans_fenetre_active(monkeypatch):
+    sources = []
+    monkeypatch.setattr(app.GLib, "timeout_add", lambda ms, fn: sources.append(ms) or 1)
+    win = SimpleNamespace(active=False, is_active=lambda: win.active)
+    f = SimpleNamespace(stall_last=time.monotonic(), stall_off=app._suspend_offset(), stall_ms=app.STALL_TICK_MS, last_active=win,
+                        stalls={"count": 0, "max_ms": 0.0, "total_ms": 0.0}, _stall_tick=None)
+    assert VasistasApp._stall_tick(f) is False and sources == [app.STALL_IDLE_TICK_MS]
+    assert VasistasApp._stall_tick(f) is True  # déjà au ralenti
+    win.active = True
+    assert VasistasApp._stall_tick(f) is False and sources[-1] == app.STALL_TICK_MS
+    assert f.stalls["count"] == 0
+
+
+def test_sortie_de_veille_pas_comptee_comme_gel(monkeypatch):
+    monkeypatch.setattr(app.GLib, "timeout_add", lambda ms, fn: 1)
+    f = SimpleNamespace(stall_last=time.monotonic() - 5, stall_off=app._suspend_offset() - 3600,
+                        stall_ms=app.STALL_IDLE_TICK_MS, last_active=None,
+                        stalls={"count": 0, "max_ms": 0.0, "total_ms": 0.0}, _stall_tick=None)
+    VasistasApp._stall_tick(f)
+    assert f.stalls["count"] == 0
+    f.stall_last -= 5  # même retard, sans veille : compté
+    VasistasApp._stall_tick(f)
+    assert f.stalls["count"] == 1
+
+
+def test_deconnexion_repond_aux_scripts_partis(monkeypatch):
+    monkeypatch.setattr(app.vm, "release_gpu", lambda: None)
+    got = {}
+    f = SimpleNamespace(guest_ready=True, screen=None, screen_texture=object(), views={}, infos={}, textures={},
+                        wintray=SimpleNamespace(clear=lambda: None), _close=None,
+                        launch_queue=[{"t": "exec", "req": 2}],
+                        pending_exec={1: lambda r: got.setdefault(1, r), 2: lambda r: got.setdefault(2, r)})
+    f._fail_sent_requests = lambda error: VasistasApp._fail_sent_requests(f, error)
+    VasistasApp.on_state(f, False)
+    assert got[1]["error"] and 2 not in got  # le 2 attend encore son envoi
+    assert list(f.pending_exec) == [2] and f.screen_texture is None

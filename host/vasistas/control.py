@@ -13,6 +13,7 @@ import threading
 
 from gi.repository import GLib
 
+from .i18n import _
 from .vm import DATA
 
 log = logging.getLogger(__name__)
@@ -94,4 +95,4 @@ def request(req: dict, timeout=None) -> dict:
         f.write(json.dumps(req).encode() + b"\n")
         f.flush()
         line = f.readline()
-    return json.loads(line) if line else {"error": "pas de réponse"}
+    return json.loads(line) if line else {"error": _("pas de réponse")}

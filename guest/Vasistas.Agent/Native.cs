@@ -70,8 +70,8 @@ namespace Vasistas.Agent
     static class Native
     {
         public const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
-        public const long WS_POPUP = 0x80000000L, WS_CAPTION = 0x00C00000L, WS_CHILD = 0x40000000L;
-        public const long WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_TRANSPARENT = 0x20;
+        public const long WS_POPUP = 0x80000000L, WS_CAPTION = 0x00C00000L, WS_THICKFRAME = 0x00040000L;
+        public const long WS_EX_TOOLWINDOW = 0x80, WS_EX_TRANSPARENT = 0x20;
         public const uint GW_OWNER = 4, GA_ROOT = 2, GA_ROOTOWNER = 3;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14, DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         public const int DWMWCP_DONOTROUND = 1;
@@ -79,10 +79,10 @@ namespace Vasistas.Agent
         public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
         public const uint PW_RENDERFULLCONTENT = 2;
         public const int SRCCOPY = 0x00CC0020, CAPTUREBLT = 0x40000000;
-        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10, SWP_SHOWWINDOW = 0x40;
+        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10;
         public static readonly IntPtr HWND_TOP = IntPtr.Zero;
-        public const int SW_RESTORE = 9;
-        public const uint WM_CLOSE = 0x10, WM_NCHITTEST = 0x84;
+        public const int SW_RESTORE = 9, SW_SHOWNOACTIVATE = 4;
+        public const uint WM_CLOSE = 0x10, WM_NCHITTEST = 0x84, WM_CHAR = 0x102;
         public const uint SMTO_ABORTIFHUNG = 2;
         public const int INPUT_MOUSE = 0, INPUT_KEYBOARD = 1;
         public const uint MOUSEEVENTF_MOVE = 1, MOUSEEVENTF_LEFTDOWN = 2, MOUSEEVENTF_LEFTUP = 4,
@@ -94,7 +94,6 @@ namespace Vasistas.Agent
         public const int SM_CXSCREEN = 0, SM_CYSCREEN = 1, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77,
             SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
         public const uint PM_REMOVE = 1, QS_ALLINPUT = 0x04FF;
-        public const uint WAIT_TIMEOUT = 258;
 
         [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
         [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
@@ -113,6 +112,8 @@ namespace Vasistas.Agent
         [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+        // fenêtre d'un autre fil : sans attendre une application qui ne répond plus
+        [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hwnd, int cmd);
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
         [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
         [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT pt);
@@ -132,6 +133,7 @@ namespace Vasistas.Agent
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern IntPtr CreateWindowEx(uint exStyle, string cls, string name, uint style, int x, int y, int w, int h,
             IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool AddClipboardFormatListener(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG msg, IntPtr hwnd, uint min, uint max, uint remove);
         [DllImport("user32.dll")] public static extern bool TranslateMessage(ref MSG msg);
         [DllImport("user32.dll")] public static extern IntPtr DispatchMessage(ref MSG msg);
@@ -154,6 +156,18 @@ namespace Vasistas.Agent
         [DllImport("user32.dll")] public static extern bool SetSystemCursor(IntPtr cursor, uint id);
         [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint action, uint param, IntPtr pv, uint winIni);
         public const uint SPI_SETCURSORS = 0x57;
+        [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool SystemParametersInfo(uint action, uint param, out RECT pv, uint winIni);
+        [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool SystemParametersInfo(uint action, uint param, out int pv, uint winIni);
+        public const uint SPI_GETWORKAREA = 0x30, SPI_GETFONTSMOOTHING = 0x4A, SPI_SETFONTSMOOTHING = 0x4B,
+            SPI_GETFONTSMOOTHINGTYPE = 0x200A, SPI_SETFONTSMOOTHINGTYPE = 0x200B;
+        public const uint SPIF_UPDATEINIFILE = 1, SPIF_SENDCHANGE = 2;
+        public const int FE_FONTSMOOTHINGSTANDARD = 1, FE_FONTSMOOTHINGCLEARTYPE = 2;
+        public const uint WM_SETTINGCHANGE = 0x1A;
+        public static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
+        [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode)]
+        public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr w, string l, uint flags, uint timeout, out IntPtr result);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
 
         // Événements d'accessibilité (SetWinEventHook, hors processus) : la liste des fenêtres
         // suit Windows sans sondage.
@@ -162,8 +176,10 @@ namespace Vasistas.Agent
         public static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint tid, uint flags);
         public const uint WINEVENT_OUTOFCONTEXT = 0, WINEVENT_SKIPOWNPROCESS = 2;
         public const uint EVENT_SYSTEM_FOREGROUND = 0x0003, EVENT_SYSTEM_MENUPOPUPSTART = 0x0006, EVENT_SYSTEM_MENUPOPUPEND = 0x0007,
-            EVENT_SYSTEM_MOVESIZEEND = 0x000B, EVENT_SYSTEM_MINIMIZESTART = 0x0016, EVENT_SYSTEM_MINIMIZEEND = 0x0017,
-            EVENT_OBJECT_CREATE = 0x8000, EVENT_OBJECT_REORDER = 0x8004, EVENT_OBJECT_LOCATIONCHANGE = 0x800B,
+            EVENT_SYSTEM_MOVESIZEEND = 0x000B, EVENT_SYSTEM_SCROLLINGSTART = 0x0012, EVENT_SYSTEM_SCROLLINGEND = 0x0013,
+            EVENT_SYSTEM_MINIMIZESTART = 0x0016, EVENT_SYSTEM_MINIMIZEEND = 0x0017,
+            EVENT_CONSOLE_CARET = 0x4001, EVENT_CONSOLE_UPDATE_SCROLL = 0x4004, EVENT_OBJECT_VALUECHANGE = 0x800E,
+            EVENT_OBJECT_CREATE = 0x8000, EVENT_OBJECT_SHOW = 0x8002, EVENT_OBJECT_REORDER = 0x8004, EVENT_OBJECT_LOCATIONCHANGE = 0x800B,
             EVENT_OBJECT_NAMECHANGE = 0x800C, EVENT_OBJECT_CLOAKED = 0x8017, EVENT_OBJECT_UNCLOAKED = 0x8018;
         public const int OBJID_WINDOW = 0;
 

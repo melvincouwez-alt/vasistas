@@ -6,3 +6,4 @@ obj/
 build/
 dist/
 docs/perf.jsonl
+guest/viogpudo/out/

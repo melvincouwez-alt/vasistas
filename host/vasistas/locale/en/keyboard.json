@@ -1,0 +1,17 @@
+{
+  "Répartition des raccourcis clavier entre le bureau et Windows quand une fenêtre Windows est active.": "How keyboard shortcuts are split between the desktop and Windows when a Windows window is active.",
+  "Raccourcis du système": "System shortcuts",
+  "Raccourcis réservés au bureau": "Shortcuts kept for the desktop",
+  "Notation de GTK : <Control>, <Shift>, <Alt>, <Super>, puis la touche": "GTK notation: <Control>, <Shift>, <Alt>, <Super>, then the key",
+  "Touche Super envoyée à Windows": "Send the Super key to Windows",
+  "Dans une fenêtre Windows, la touche Super ouvre le menu Démarrer de Windows et ses raccourcis (Super+E, Super+V…) sont envoyés à Windows. Désactivé : la touche Super reste au bureau Linux.": "In a Windows window, the Super key opens the Windows Start menu and its shortcuts (Super+E, Super+V…) are sent to Windows. Off: the Super key stays with the Linux desktop.",
+  "Alt+Tab dans Windows": "Alt+Tab in Windows",
+  "Dans une fenêtre Windows, Alt+Tab passe d'une fenêtre Windows à l'autre. Désactivé : Alt+Tab est géré par le bureau et parcourt toutes les fenêtres.": "In a Windows window, Alt+Tab switches between Windows windows. Off: Alt+Tab is handled by the desktop and cycles through all windows.",
+  "Le bureau demande votre autorisation la première fois, pour chaque fenêtre Windows. Super+Échap rend à tout moment les raccourcis au bureau. S'applique à la prochaine fenêtre Windows activée.": "The desktop asks for your permission the first time, for each Windows window. Super+Escape gives the shortcuts back to the desktop at any time. Applies to the next Windows window you activate.",
+  "Jamais envoyés à Windows. Quand Windows reçoit les raccourcis du système, le premier appui rend les raccourcis au bureau et le second déclenche le raccourci.": "Never sent to Windows. When Windows receives system shortcuts, the first press returns shortcuts to the desktop and the second triggers the shortcut.",
+  "Ajouter": "Add",
+  "Liste par défaut": "Default list",
+  "Raccourci non reconnu. Exemple de format valide : <Super>Left": "Shortcut not recognized. Example of a valid format: <Super>Left",
+  "Retirer": "Remove",
+  "Aucun raccourci réservé": "No shortcut kept for the desktop"
+}

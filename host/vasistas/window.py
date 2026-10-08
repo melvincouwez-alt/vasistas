@@ -102,6 +102,7 @@ class GuestView(Gtk.Picture):
         self.cursor_name = "default"
         self.texture = None
         self.src_rect = None
+        self.frozen = {}  # popup -> (rect, texture) : zone gardée telle qu'avant le menu
         self.nc_top = 0   # lignes du haut (pixels invité) masquées : barre de titre remplacée par celle de Linux
         legacy = Gtk.EventControllerLegacy()
         legacy.connect("event", self._on_event)
@@ -123,6 +124,15 @@ class GuestView(Gtk.Picture):
         self.texture = texture
         self.src_rect = tuple(rect)
         self.queue_draw()
+
+    def freeze(self, wid, rect, texture):
+        if texture is not None:
+            self.frozen[wid] = (tuple(rect), texture)
+            self.queue_draw()
+
+    def unfreeze(self, wid):
+        if self.frozen.pop(wid, None):
+            self.queue_draw()
 
     def do_snapshot(self, snapshot):
         # Pixel pour pixel, sans lissage : le filtrage linéaire rend le texte flou au
@@ -160,6 +170,16 @@ class GuestView(Gtk.Picture):
             # écran à 100 %) par mipmaps, bien plus lisible qu'en linéaire ; agrandie en linéaire
             filt = Gsk.ScalingFilter.TRILINEAR if gs > scale_of(self) else Gsk.ScalingFilter.LINEAR
             snapshot.append_scaled_texture(texture, filt, Graphene.Rect().init(-x * k, -y * k, tw, th))
+        if self.src_rect:
+            # zones sous un menu devenu popup : l'image d'avant le menu (voir app._create)
+            dx, dy = self._device_offset() if exact else (0.0, 0.0)
+            for (fx, fy, fw, fh), ftex in self.frozen.values():
+                bounds = Graphene.Rect().init(dx + (fx - x) * k, dy + (fy - y) * k,
+                                              ftex.get_width() * k, ftex.get_height() * k)
+                if exact:
+                    snapshot.append_texture(ftex, bounds)
+                else:
+                    snapshot.append_scaled_texture(ftex, Gsk.ScalingFilter.LINEAR, bounds)
         snapshot.pop()
 
     def _device_offset(self):
@@ -215,6 +235,12 @@ class GuestView(Gtk.Picture):
         s = self.owner.guest_scale()
         return int(x * s), int(y * s) + self.nc_top, sx, sy
 
+    def _under_frozen(self, gx, gy):
+        if not self.frozen or not self.src_rect:
+            return False
+        px, py = self.src_rect[0] + gx, self.src_rect[1] + gy
+        return any(fx <= px < fx + fw and fy <= py < fy + fh for (fx, fy, fw, fh), _ in self.frozen.values())
+
     def _on_event(self, ctrl, event):
         # PyGObject ne sait pas passer un GdkEvent dans ce signal : il arrive à None
         event = event or ctrl.get_current_event()
@@ -230,6 +256,15 @@ class GuestView(Gtk.Picture):
         gx, gy, sx, sy = pos
         wid = self.owner.wid
         send = self.owner.send
+
+        if et != Gdk.EventType.BUTTON_RELEASE and self._under_frozen(gx, gy):
+            # sous l'image figée, le vrai menu de Windows est là, invisible : le survol ne
+            # l'atteint pas, un clic le ferme comme un clic hors d'un menu (Échap)
+            if et == Gdk.EventType.BUTTON_PRESS:
+                self.swallowed.add(event.get_button())
+                for down in (True, False):
+                    send({"t": "key", "sc": 1, "ext": False, "down": down})
+            return True
 
         edge = self._host_edge(event)
         if et == Gdk.EventType.MOTION_NOTIFY and self.caption_press is not None:
@@ -362,18 +397,90 @@ class GuestView(Gtk.Picture):
 
 
 class KeyboardMixin:
-    """Clavier capturé au niveau de la fenêtre GTK, transmis en scancodes."""
+    """Clavier capturé au niveau de la fenêtre GTK, transmis en scancodes.
+
+    Gala intercepte ses raccourcis (Super, Alt+Tab) avant l'application. Pour les envoyer à
+    Windows (réglages super_to_windows, alt_tab_windows), la fenêtre demande au compositeur de
+    les lui laisser (gdk_toplevel_inhibit_system_shortcuts, protocole
+    zwp_keyboard_shortcuts_inhibit_manager_v1) : tant qu'elle a le focus pour Super, pendant
+    qu'Alt est enfoncé pour Alt+Tab seul. Gala demande l'autorisation une fois par fenêtre ;
+    Super+Échap rend toujours les raccourcis au bureau. Les raccourcis réservés au bureau
+    (reserved_shortcuts) ne partent jamais vers Windows ; pressés pendant l'inhibition, ils la
+    lèvent jusqu'au prochain focus (une seconde pression atteint alors le bureau)."""
 
     def _setup_keyboard(self):
         self.held_keys = set()
+        self.swallowed = set()       # touches gardées pour le bureau : leur relâchement aussi
+        self.kb = (False, False, [])  # relu à chaque activation (keymap.keyboard_settings)
+        self.inhibited = False
+        self.inhibit_lifted = False
         ctrl = Gtk.EventControllerKey()
         ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         ctrl.connect("key-pressed", self._on_key, True)
         ctrl.connect("key-released", self._on_key, False)
         self.add_controller(ctrl)
+        self.connect("notify::is-active", self._on_keyboard_focus)
+
+    def _on_keyboard_focus(self, *_):
+        if self.is_active():
+            from . import vm
+            try:
+                self.kb = keymap.keyboard_settings(vm.load_config())
+            except (OSError, ValueError):
+                pass
+            self.inhibit_lifted = False
+            if keymap.inhibit_mode(*self.kb[:2]) == "active":
+                self._inhibit(True)
+        else:
+            self._inhibit(False)
+            self.swallowed.clear()
+
+    def _inhibit(self, on):
+        surface = self.get_surface()
+        if not isinstance(surface, Gdk.Toplevel):
+            return
+        if on and not self.inhibited and not self.inhibit_lifted:
+            surface.inhibit_system_shortcuts(None)
+            self.inhibited = True
+        elif not on and self.inhibited:
+            surface.restore_system_shortcuts()
+            self.inhibited = False
+
+    @staticmethod
+    def _modifiers(state):
+        mods = set()
+        for mask, name in ((Gdk.ModifierType.CONTROL_MASK, "ctrl"), (Gdk.ModifierType.SHIFT_MASK, "shift"),
+                           (Gdk.ModifierType.ALT_MASK, "alt"), (Gdk.ModifierType.SUPER_MASK, "super"),
+                           (Gdk.ModifierType.META_MASK, "super")):
+            if state & mask:
+                mods.add(name)
+        return mods
 
     def _on_key(self, ctrl, keyval, keycode, state, down):
-        msg = keymap.xkb_to_message(keycode, down)
+        super_to_windows, alt_tab_windows, reserved = self.kb
+        mode = keymap.inhibit_mode(super_to_windows, alt_tab_windows)
+        if not down and keycode in self.swallowed:
+            self.swallowed.discard(keycode)
+            return True
+        if down:
+            mods = self._modifiers(state)
+            name = Gdk.keyval_name(Gdk.keyval_to_lower(keyval)) or ""
+            alt_tab = name in ("Tab", "ISO_Left_Tab") and "alt" in mods
+            if keymap.shortcut_matches(reserved, name, mods) or (alt_tab and not alt_tab_windows):
+                # raccourci du bureau : rien vers Windows
+                self.swallowed.add(keycode)
+                if self.inhibited and mode == "active":
+                    self._inhibit(False)
+                    self.inhibit_lifted = True
+                return True
+            if alt_tab and keymap.KEY_LEFTALT + 8 not in self.held_keys:
+                # Alt tenu depuis une autre fenêtre (Windows a changé de fenêtre au premier Tab) :
+                # Windows l'a vu relâché, on le lui renvoie enfoncé
+                self.held_keys.add(keymap.KEY_LEFTALT + 8)
+                self.send(keymap.xkb_to_message(keymap.KEY_LEFTALT + 8, True))
+        if mode == "alt" and keycode == keymap.KEY_LEFTALT + 8:
+            self._inhibit(down)
+        msg = keymap.xkb_to_message(keycode, down, super_key=super_to_windows)
         if msg is None:
             return False
         if down:
@@ -385,7 +492,7 @@ class KeyboardMixin:
 
     def release_keys(self):
         for keycode in list(self.held_keys):
-            msg = keymap.xkb_to_message(keycode, False)
+            msg = keymap.xkb_to_message(keycode, False, super_key=True)
             if msg:
                 self.send(msg)
         self.held_keys.clear()
@@ -401,6 +508,7 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         self.app = app
         self.wid = info["id"]
         self.kind = info.get("kind", "normal")
+        self.sizable = info.get("sizable", True)  # faux : écran d'accueil, taille fixée par l'appli
         self.guest_size = (0, 0)
         self.dpi = info.get("dpi", 0)  # DPI de la fenêtre dans Windows
         self.nc = 0               # hauteur de la barre de titre native de Windows (0 : dessinée par l'appli)
@@ -419,11 +527,14 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         self.connect("close-request", self._on_close_request)
         self.connect("notify::is-active", self._on_active)
         # réduite ou entièrement masquée sous Linux : l'agent cesse de la capturer
-        self.connect("notify::suspended", lambda w, _p: self.send(
-            {"t": "window.hosthidden", "id": self.wid, "hidden": w.is_suspended()}))
+        self.connect("notify::suspended", self._on_suspended)
         self.app_name = info.get("app")
         self.map_time = 0
         self.size_fixes = 0
+        self.placed = False       # écran et taille choisis à la première apparition (placement.py)
+        self.moving = False       # changement d'écran en cours (plein écran puis retour)
+        self.target = None        # écran voulu (None : celui que choisit Gala)
+        self.memory = {}          # taille et écran mémorisés pour son application
         self.connect("realize", self._on_realize)
         # GTK repose l'identifiant de l'application à l'affichage : on repasse derrière
         self.connect("map", self._on_realize)
@@ -432,6 +543,11 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
 
     def send(self, msg):
         self.app.send(msg)
+
+    def _on_suspended(self, win, _pspec):
+        self.send({"t": "window.hosthidden", "id": self.wid, "hidden": self.is_suspended()})
+        if not self.is_suspended():
+            self.app.screen_resume()
 
     def _on_realize(self, win):
         surface = self.get_surface()
@@ -457,6 +573,7 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         # Fenêtre passée sur un autre écran : l'écran de travail de l'invité peut changer
         # (temporisé jusqu'à ce qu'elle soit posée) ; Windows renvoie ensuite le `rect`.
         self.app.schedule_update_scale()
+        self.app.remember_window(self)
         # pas de redimensionnement ici : l'invité garde son échelle jusqu'à ce que la
         # fenêtre soit posée, et le `rect` suivant donne la taille juste (sinon la fenêtre
         # gonfle ou rétrécit pendant le glisser entre deux écrans)
@@ -534,6 +651,7 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
     def _on_map_size(self, win):
         self.map_time = GLib.get_monotonic_time() // 1000
         self.size_fixes = 0
+        self.app.placement_on_map(self)
 
     def _imposed_size(self, width, height):
         """Vrai si le compositeur vient d'imposer une taille à la fenêtre tout juste affichée
@@ -550,8 +668,14 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         if not gw or gh <= 0 or (abs(round(width * s) - gw) <= SIZE_TOLERANCE_PX
                                  and abs(round(height * s) - gh) <= SIZE_TOLERANCE_PX):
             return False
-        self.size_fixes += 1
         lw, lh = max(1, round(gw / s)), self._host_height(gh + self.view.nc_top, s)
+        from . import placement
+        monitor = placement.monitor_of(self)
+        if monitor is not None:
+            g = monitor.get_geometry()
+            if lw > g.width or lh > g.height:
+                return False  # plus grande que l'écran : le compositeur a raison de la borner
+        self.size_fixes += 1
         log.info("fenêtre %s : %dx%d imposé par le compositeur, retour à %dx%d", self.wid, width, height, lw, lh)
 
         def fix():
@@ -563,7 +687,8 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
         return True
 
     def on_view_resized(self, width, height):
-        if self.kind == "popup":
+        if self.kind == "popup" or self.moving:
+            # changement d'écran : le plein écran de passage ne va pas à Windows
             return
         if self._imposed_size(width, height):
             return
@@ -588,6 +713,7 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
                 "fenêtre %s : %dx%d demandé (invité %dx%d, vue %dx%d, échelle %.3f, réalisée %s, visible %s)",
                 self.wid, pw, ph, gw, gh, w, h, s, self.get_realized(), self.get_mapped())
             self.send({"t": "window.resize", "id": self.wid, "w": pw, "h": ph})
+            self.app.remember_window(self)
         return False
 
     def toggle_maximize(self):
@@ -607,6 +733,7 @@ class GuestWindow(KeyboardMixin, Gtk.Window):
             self.minimize()
 
     def _on_close_request(self, win):
+        self.app.remember_window(self, delay_ms=0)
         self.send({"t": "window.close", "id": self.wid})
         return True  # la fenêtre disparaît quand l'invité confirme
 
@@ -688,6 +815,7 @@ class GuestPopup(Gtk.Popover):
         self.set_pointing_to(rect)
 
     def destroy_view(self):
+        self.parent_view.unfreeze(self.wid)
         self.app.forget(self.wid)
         self.popdown()
         self.unparent()
@@ -697,7 +825,7 @@ CSS = b"""
 window.vasistas { background: black; }
 /* cadre seul : coins arrondis et ombre douce, sans lisere */
 window.vasistas-frame.csd, window.vasistas-frame.csd decoration {
-    border: none; outline: none; border-radius: 9px; overflow: hidden;
+    border: none; outline: none; border-radius: 9px;
     box-shadow: 0 1px 4px 0 alpha(black, 0.3), 0 4px 10px 0 alpha(black, 0.2);
 }
 window.vasistas-frame, window.vasistas-frame.csd decoration { background: transparent; }

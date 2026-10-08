@@ -11,9 +11,23 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.26100.9169" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <EmbeddedResource Include="native/libzstd.dll.gz" LogicalName="libzstd.dll.gz" />
   </ItemGroup>
+  <!-- UI Automation COM (UIA3) : types d'interop embarqués dans l'exe, qui reste seul à copier
+       (update_agent.py n'envoie que lui). Le paquet les veut en DLL à part : on reprend la main
+       après sa cible. -->
+  <Target Name="EmbedUiaInterop" AfterTargets="EmbeddingAssemblyInteropUIAutomationClient" BeforeTargets="FindReferenceAssembliesForReferences">
+    <ItemGroup>
+      <ReferencePath Condition=" '%(FileName)' == 'Interop.UIAutomationClient' ">
+        <EmbedInteropTypes>true</EmbedInteropTypes>
+        <Private>false</Private>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
 </Project>

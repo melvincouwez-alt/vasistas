@@ -1,0 +1,10 @@
+{
+  "Les applications demandées s'ouvriront dès que Windows répondra. Vous pouvez aussi redémarrer Windows.": "The apps you asked for will open as soon as Windows responds. You can also restart Windows.",
+  "Plus assez d'espace disque": "Running out of disk space",
+  "Il reste {n} Go d'espace libre : Windows risque de s'arrêter. Libérez de l'espace disque ou supprimez des points de restauration.": "{n} GB of free space left: Windows may stop. Free up disk space or delete restore points.",
+  "L'agent Vasistas installé dans Windows n'est pas à jour": "The Vasistas agent installed in Windows is out of date",
+  "L'agent installé dans Windows est en version {agent}, Vasistas est en version {host}. La mise à jour de l'agent prend environ une minute et ne modifie pas vos applications.": "The agent installed in Windows is version {agent}, Vasistas is version {host}. Updating the agent takes about a minute and does not change your apps.",
+  "Ouvrir le diagnostic": "Open Diagnostics",
+  "Windows ne redémarre pas": "Windows does not restart",
+  "Ouvrez le diagnostic pour connaître la cause du problème.": "Open Diagnostics to find the cause of the problem."
+}

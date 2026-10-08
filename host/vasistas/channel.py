@@ -112,7 +112,8 @@ class Channel:
         while True:
             with self.out_cond:
                 while not self.outbox and self.sock is s:
-                    self.out_cond.wait(1.0)
+                    # sans délai : _run réveille le fil (notify_all) quand la connexion tombe
+                    self.out_cond.wait()
                 if self.sock is not s:
                     return
                 batch = list(self.outbox)
@@ -164,7 +165,7 @@ class Channel:
 
     def _hello_loop(self, s):
         while self.sock is s and not self.guest_ready:
-            self.send({"t": "hello", "version": protocol.VERSION, **self.hello_extra})
+            self.send(protocol.hello(**self.hello_extra))
             time.sleep(1)
 
     def _read_loop(self, s):

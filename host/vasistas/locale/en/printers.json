@@ -1,0 +1,19 @@
+{
+  "Imprimantes": "Printers",
+  "Imprimer depuis Windows sur les imprimantes de Linux.": "Print from Windows on the Linux printers.",
+  "Relire les imprimantes de Linux et les reporter dans Windows": "Read the Linux printers again and copy them to Windows",
+  "Imprimantes de Linux": "Linux printers",
+  "Aucune imprimante ajoutée dans les Paramètres de Linux.": "No printer added in the Linux settings.",
+  "Actualiser": "Refresh",
+  "Partager les imprimantes avec Windows": "Share printers with Windows",
+  "Chaque imprimante de Linux apparaît dans Windows sous son nom suivi de « (Linux) ». Linux garde les pilotes et les réglages ; rien n'est ouvert au réseau. S'applique au prochain démarrage de Windows.": "Each Linux printer shows up in Windows under its name followed by “(Linux)”. Linux keeps the drivers and settings; nothing is opened to the network. Applies at the next Windows start.",
+  "Windows a démarré avant l'activation de cette option : redémarrez Windows pour partager les imprimantes.": "Windows started before this option was turned on: restart Windows to share the printers.",
+  "Redémarrez Windows pour partager les imprimantes": "Restart Windows to share the printers",
+  "Les imprimantes sont reportées dans Windows au prochain démarrage de Windows.": "The printers are added to Windows the next time Windows starts.",
+  "Les imprimantes sont reportées dans Windows à chaque démarrage de Windows, ou avec le bouton « Actualiser ».": "The printers are added to Windows each time Windows starts, or with the “Refresh” button.",
+  "Détectées sur le réseau sans être ajoutées : {names}.": "Found on the network but not added: {names}.",
+  "par défaut sous Linux": "default on Linux",
+  "Les imprimantes seront reportées au prochain démarrage de Windows": "The printers will be copied at the next Windows start",
+  "Imprimantes dans Windows : {n} ajoutée(s), {m} retirée(s)": "Printers in Windows: {n} added, {m} removed",
+  "nom d'imprimante invalide : {name}": "invalid printer name: {name}"
+}

@@ -1,0 +1,21 @@
+{
+  "Windows (Vasistas)": "Windows (Vasistas)",
+  "En ligne": "Online",
+  "Navigateur": "Browser",
+  "Choix de l'application qui ouvre les documents Word, Excel et PowerPoint cliqués dans Chrome : Office de Windows ou Office en ligne.": "Choose what opens Word, Excel and PowerPoint documents clicked in Chrome: Office in Windows or Office online.",
+  "L'extension « Lucarne » n'est pas encore chargée dans Chrome.": "The “Lucarne” extension is not loaded in Chrome yet.",
+  "Extension chargée en version {version} : rechargez l'extension pour passer à la version {want}.": "Extension loaded at version {version}: reload the extension to switch to version {want}.",
+  "Extension chargée. Après une mise à jour (version actuelle {want}), cliquez sur ⟳ dans la page des extensions.": "Extension loaded. After an update (current version {want}), click ⟳ on the extensions page.",
+  "Ouvrir les extensions de Chrome": "Open Chrome extensions",
+  "Première installation : activez le mode développeur, cliquez sur « Charger l'extension non empaquetée » et sélectionnez le dossier {path}. Après une mise à jour : cliquez sur le bouton ⟳ de l'extension.": "First installation: turn on Developer mode, click “Load unpacked” and select the folder {path}. After an update: click the extension's ⟳ button.",
+  "Ouvrir les documents dans": "Open documents in",
+  "Lucarne n'a pas pu enregistrer le réglage": "Lucarne could not save the setting",
+  "Réglage enregistré et transmis immédiatement à l'extension": "Setting saved and sent to the extension immediately",
+  "Outlook de bureau s'ouvre sans le message cliqué": "Desktop Outlook opens without the clicked message",
+  "Office de Windows reçoit l'adresse du fichier lui-même : l'extension retrouve cette adresse grâce à votre session SharePoint dans Chrome.": "Office in Windows receives the address of the file itself: the extension finds this address using your SharePoint session in Chrome.",
+  "Derniers liens": "Recent links",
+  "ouvert en fichier": "opened as a file",
+  "adresse du fichier introuvable": "file address not found",
+  "{when}  {app} : {result}": "{when}  {app}: {result}",
+  "Aucun lien ouvert pour l'instant.": "No links opened yet."
+}

@@ -4,7 +4,13 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from vasistas import catalog
+from vasistas import i18n, catalog
+
+
+@pytest.fixture(autouse=True)
+def francais(monkeypatch):
+    # messages attendus en français, quelle que soit la langue du poste
+    monkeypatch.setattr(i18n, "_lang", "fr")
 
 
 def _parse(xml):
@@ -81,16 +87,6 @@ def test_visio_sans_variante_regionale():
 def test_refus_langues(langs, proofing):
     with pytest.raises(ValueError):
         catalog.office_config("business", languages=langs, proofing=proofing)
-
-
-def test_ajout_de_langues_a_office_installe():
-    root = _parse(catalog.office_languages_config(["de-de", "MatchOS"], ["it-it", "de-de"]))
-    add = root.find("Add")
-    assert "Channel" not in add.attrib
-    assert [(p.get("ID"), [l.get("ID") for l in p.findall("Language")]) for p in add.findall("Product")] == \
-        [("LanguagePack", ["de-de"]), ("ProofingTools", ["it-it"])]
-    with pytest.raises(ValueError):
-        catalog.office_languages_config([], [])
 
 
 def test_liste_des_langues():

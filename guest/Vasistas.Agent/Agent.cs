@@ -20,7 +20,7 @@ namespace Vasistas.Agent
         public bool Occluded; // une autre fenêtre suivie la recouvre en partie dans l'invité
         public bool HostHidden; // sa fenêtre Linux est réduite ou masquée : rien à capturer
         public readonly Capture Capture = new Capture();
-        public long NextCapture;
+        public long NextCapture, LastCapture;
         public int Unchanged;   // captures successives sans changement : l'intervalle s'allonge
         public int Hit = -1;
         public string Cursor;
@@ -30,13 +30,27 @@ namespace Vasistas.Agent
     sealed class Agent
     {
         const int Version = 1;
+        // version de Vasistas pour laquelle l'agent est construit (champ agentVersion du hello) :
+        // à tenir égale à VERSION de host/vasistas/version.py ; l'hôte propose une mise à jour si
+        // l'agent est plus ancien (version.newer)
+        const string AgentVersion = "0.9.0";
         // La liste des fenêtres suit les événements de Windows (SetWinEventHook) ; le balayage
         // périodique n'est plus qu'un filet de sécurité.
-        const int FallbackScanMs = 500, MinScanGapMs = 8, SyncMs = 3000, IdleWaitMs = 100;
+        const int FallbackScanMs = 500, MinScanGapMs = 8, SyncMs = 3000, IdleWaitMs = 500, NoHostWaitMs = 1000;
         const int ActiveMs = 16, IdleMs = 100;
+        // fil de capture sans fenêtre à capturer : il dort jusqu'au signal de la boucle principale,
+        // ce délai n'étant qu'un filet si un changement d'état passait inaperçu
+        const int CaptureSleepMs = 1000;
         // fenêtre recouverte, en mode écran QEMU : PrintWindow coûte 30 à 90 ms, deux fois par seconde
         // suffit ; image inchangée plusieurs fois de suite : jusqu'à OccludedMaxMs entre deux captures
-        const int OccludedMs = 500, OccludedMaxMs = 2000;
+        const int OccludedMs = 500, OccludedMaxMs = 2000, ReleaseAfterMs = 10000;
+        // fenêtre recouverte dont le contenu change (curseur texte, défilement, console) : capture
+        // dès l'événement, à cette cadence au plus (le repos garde OccludedMs)
+        const int EventCaptureMs = 50;
+        // cadence choisie par l'hôte selon son profil de puissance (message capture)
+        volatile int occludedBaseMs = OccludedMs;
+        // minuterie à 1 ms voulue par l'hôte (message capture, faux sur batterie)
+        bool timerWanted;
         static readonly HashSet<string> IgnoredClasses = new HashSet<string>
         {
             "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Progman", "WorkerW",
@@ -66,23 +80,39 @@ namespace Vasistas.Agent
         HoverWorker hover;
         readonly object sync = new object();
         readonly AutoResetEvent captureWake = new AutoResetEvent(false); // fenêtres suivies, partagées avec le fil de capture
+        bool captureIdle; // sous `sync` : le fil de capture dort faute de fenêtre à capturer
         bool wasReady;
         readonly Dictionary<IntPtr, string> cursorNames = new Dictionary<IntPtr, string>();
+        // nouvelle fenêtre plus grande que l'écran de Windows ou hors de l'écran : ramenée dedans
+        // avant window.new (champ `clamp` de hello/display, actif par défaut)
+        bool clampNew = true;
+        int lastScalePercent;      // dernière échelle demandée par l'hôte (redonnée après un changement de mode)
+        const double ClampMax = 0.9;
+        Toasts toasts;
+        Tray tray;
 
         public void Run()
         {
             Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); // PER_MONITOR_AWARE_V2
+            Wgc.Prewarm();
             // Fenêtre de l'agent, hors écran : prend le premier plan pour fermer menus et popups
             hidden = Native.CreateWindowEx((uint)Native.WS_EX_TOOLWINDOW, "STATIC", "Vasistas",
                 0x80000000u | 0x10000000u, -32000, -32000, 1, 1, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             InitCursors();
             clipboard = new ClipboardSync(Send);
+            // copie dans Windows : WM_CLIPBOARDUPDATE réveille la boucle principale, qui ne relit
+            // plus le presse-papiers que toutes les IdleWaitMs en filet
+            if (!Native.AddClipboardFormatListener(hidden))
+                Log.Write("presse-papiers : pas d'avis de copie (" + Marshal.GetLastWin32Error() + "), relu toutes les " + IdleWaitMs + " ms");
+            toasts = new Toasts(Send);
+            tray = new Tray(Send, () => ch.HostReady);
             Log.Sink = msg => { if (ch.HostReady) ch.Send(new Dictionary<string, object> { { "t", "log" }, { "msg", msg } }); };
             ch.Start();
             hover = new HoverWorker(this);
             InstallHooks();
             new Thread(CaptureLoop) { IsBackground = true, Name = "vasistas-capture" }.Start();
             ShareGuard.Start();
+            TimerRes.EnsureGlobal();
             Log.Write("agent démarré, pid " + myPid);
 
             var handles = new[] { ch.InboxEvent.SafeWaitHandle.DangerousGetHandle() };
@@ -114,9 +144,11 @@ namespace Vasistas.Agent
                 if (wasReady && !ch.HostReady)
                 {
                     wasReady = false;
+                    Input.ReleaseButtons();
                     Log.Write("hôte perdu");
                 }
-                if (!ch.HostReady) { wait = IdleWaitMs; continue; }
+                TimerRes.Set(timerWanted && ch.HostReady && windows.Count > 0);
+                if (!ch.HostReady) { wait = NoHostWaitMs; continue; } // InboxEvent réveille au hello
                 long now = clock.ElapsedMilliseconds;
                 if ((scanDue && now - lastScanAt >= MinScanGapMs) || now >= nextScan)
                 {
@@ -143,9 +175,14 @@ namespace Vasistas.Agent
                     nextStats = now + period;
                     if (Stats.Grabs > 0 || Stats.KeysIn > 0 || Stats.Scans > 0) Send(new Dictionary<string, object> { { "t", "log" }, { "msg", Stats.TakeReport(secs) } });
                 }
+                // fenêtre devenue à capturer (nouvelle, rétablie, recouverte, mode d'image changé…) :
+                // un seul test ici plutôt qu'un signal à chaque endroit qui change ces états
+                if (captureIdle && windows.Values.Any(Capturable)) { captureIdle = false; captureWake.Set(); }
                 // Réveil au plus tard pour le prochain balayage de secours, le presse-papiers
-                // (IdleWaitMs) ou un balayage demandé mais trop proche du précédent.
+                // (IdleWaitMs, ou nouvel essai s'il était verrouillé) ou un balayage demandé mais
+                // trop proche du précédent.
                 long due = Math.Min(nextScan, now + IdleWaitMs);
+                if (clipboard.RetryAt > now) due = Math.Min(due, clipboard.RetryAt);
                 if (scanDue) due = Math.Min(due, lastScanAt + MinScanGapMs);
                 wait = (int)Math.Max(1, Math.Min(IdleWaitMs, due - clock.ElapsedMilliseconds));
                 }
@@ -165,6 +202,10 @@ namespace Vasistas.Agent
                 (Native.EVENT_OBJECT_CREATE, Native.EVENT_OBJECT_REORDER),     // création, destruction, affichage, masquage, ordre
                 (Native.EVENT_OBJECT_LOCATIONCHANGE, Native.EVENT_OBJECT_NAMECHANGE),
                 (Native.EVENT_OBJECT_CLOAKED, Native.EVENT_OBJECT_UNCLOAKED),
+                // contenu d'une fenêtre recouverte : défilement, valeur (ascenseurs), console
+                (Native.EVENT_SYSTEM_SCROLLINGSTART, Native.EVENT_SYSTEM_SCROLLINGEND),
+                (Native.EVENT_OBJECT_VALUECHANGE, Native.EVENT_OBJECT_VALUECHANGE),
+                (Native.EVENT_CONSOLE_CARET, Native.EVENT_CONSOLE_UPDATE_SCROLL),
             };
             int ok = 0;
             foreach (var (min, max) in ranges)
@@ -179,8 +220,20 @@ namespace Vasistas.Agent
         /// </summary>
         void OnWinEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
         {
-            if (idObject != Native.OBJID_WINDOW || idChild != 0 || hwnd == IntPtr.Zero) return;
-            if (ev == Native.EVENT_OBJECT_LOCATIONCHANGE || ev == Native.EVENT_OBJECT_NAMECHANGE || ev == Native.EVENT_OBJECT_REORDER)
+            if (hwnd == IntPtr.Zero) return;
+            bool content = (ev == Native.EVENT_OBJECT_LOCATIONCHANGE && idObject != Native.OBJID_WINDOW)  // curseur texte, enfants
+                || ev == Native.EVENT_OBJECT_VALUECHANGE || ev == Native.EVENT_SYSTEM_SCROLLINGSTART || ev == Native.EVENT_SYSTEM_SCROLLINGEND
+                || (ev >= Native.EVENT_CONSOLE_CARET && ev <= Native.EVENT_CONSOLE_UPDATE_SCROLL);
+            if (content)
+            {
+                // fenêtre recouverte capturée par l'agent : image refaite dès que son contenu bouge
+                var root = Native.GetAncestor(hwnd, Native.GA_ROOT);
+                if (root != IntPtr.Zero && windows.TryGetValue(root, out var otw) && otw.Occluded) CaptureSoon(otw);
+                return;
+            }
+            if (idObject != Native.OBJID_WINDOW || idChild != 0) return;
+            if ((ev == Native.EVENT_OBJECT_SHOW || ev == Native.EVENT_OBJECT_UNCLOAKED) && toasts.Enabled) toasts.Shown(hwnd);
+            if (ev ==Native.EVENT_OBJECT_LOCATIONCHANGE || ev == Native.EVENT_OBJECT_NAMECHANGE || ev == Native.EVENT_OBJECT_REORDER)
             {
                 // très fréquents (contrôles enfants, curseur texte) : fenêtres de premier niveau seulement
                 if (Native.GetAncestor(hwnd, Native.GA_ROOT) != hwnd) return;
@@ -192,6 +245,21 @@ namespace Vasistas.Agent
 
         void RequestScan() => scanDue = true;
 
+        /// <summary>Fenêtre que le fil de capture doit capturer lui-même (pas lue dans l'écran de QEMU).</summary>
+        /// <summary>
+        /// Capture avancée (contenu changé : événement d'accessibilité ou nouvelle image de DWM),
+        /// à EventCaptureMs au plus de la précédente.
+        /// </summary>
+        void CaptureSoon(Tracked tw)
+        {
+            if (!Capturable(tw)) return;
+            long soon = Math.Max(tw.LastCapture + Math.Max(EventCaptureMs, occludedBaseMs / 5), 1);
+            if (tw.NextCapture > soon) { tw.NextCapture = soon; captureWake.Set(); }
+        }
+
+        bool Capturable(Tracked tw) =>
+            !tw.Minimized && !tw.HostHidden && !(framebuffer && (tw.Kind == "popup" || !tw.Occluded));
+
         /// <summary>
         /// Fil de capture : les captures lentes ne retardent plus la souris ni le clavier,
         /// traités par la boucle principale.
@@ -201,20 +269,29 @@ namespace Vasistas.Agent
             var due = new List<(Tracked tw, bool fromScreen)>();
             while (true)
             {
-                if (!ch.HostReady) { Thread.Sleep(20); continue; }
+                if (!ch.HostReady) { captureWake.WaitOne(1000); continue; } // réveillé par hello
                 long now = clock.ElapsedMilliseconds;
                 due.Clear();
                 long next = now + IdleMs;
+                bool any = false;
                 lock (sync)
                 {
                     var fg = Native.GetForegroundWindow();
                     foreach (var tw in windows.Values)
                     {
-                        if (tw.Minimized || tw.HostHidden) continue;
-                        if (framebuffer && (tw.Kind == "popup" || !tw.Occluded)) continue;
+                        if (tw.Minimized || tw.HostHidden || !Capturable(tw))
+                        {
+                            // lue dans l'écran de QEMU depuis un moment : tampons de capture rendus (pas
+                            // aussitôt, une fenêtre souvent recouverte puis découverte les réallouerait)
+                            if (now > tw.NextCapture + ReleaseAfterMs) tw.Capture.Release();
+                            continue;
+                        }
+                        any = true;
                         if (now < tw.NextCapture) { next = Math.Min(next, tw.NextCapture); continue; }
                         bool fast = !framebuffer && (tw.Kind == "popup" || tw.Hwnd == fg || Native.GetAncestor(fg, Native.GA_ROOTOWNER) == tw.Hwnd);
-                        int occludedMs = Math.Min(OccludedMaxMs, OccludedMs << Math.Min(2, tw.Unchanged / 4));
+                        int baseMs = occludedBaseMs;
+                        int occludedMs = Math.Min(Math.Max(OccludedMaxMs, baseMs), baseMs << Math.Min(2, tw.Unchanged / 4));
+                        tw.LastCapture = now;
                         tw.NextCapture = now + (fast ? ActiveMs : framebuffer ? occludedMs : IdleMs);
                         next = Math.Min(next, tw.NextCapture);
                         // la taille a pu changer depuis le dernier scan : prévenir l'hôte avant les tuiles
@@ -222,14 +299,15 @@ namespace Vasistas.Agent
                         if (r.Width != tw.Rect.Width || r.Height != tw.Rect.Height) Update(tw);
                         due.Add((tw, tw.Kind == "popup" || (tw.Hwnd == fg && Uncovered(tw))));
                     }
+                    captureIdle = !any; // relu par la boucle principale, qui réveille ce fil
                 }
                 foreach (var (tw, fromScreen) in due)
                 {
                     try { tw.Unchanged = tw.Capture.Grab(tw.Hwnd, tw.Id, fromScreen, ch) ? 0 : tw.Unchanged + 1; }
                     catch (Exception e) { Log.Write("capture " + tw.Id + " : " + e.Message); }
                 }
-                int wait = (int)(next - clock.ElapsedMilliseconds);
-                if (wait > 0) captureWake.WaitOne(Math.Min(wait, IdleMs));
+                int wait = any ? (int)Math.Min(next - clock.ElapsedMilliseconds, IdleMs) : CaptureSleepMs;
+                if (wait > 0) captureWake.WaitOne(wait);
             }
         }
 
@@ -249,13 +327,17 @@ namespace Vasistas.Agent
                 // échelle de l'écran hôte : Windows dessine directement à la bonne taille
                 if (m.TryGetValue("scale", out var sc) && sc != null)
                 {
-                    try { Display.Apply((int)Math.Round(Convert.ToDouble(sc) * 100)); }
+                    lastScalePercent = (int)Math.Round(Convert.ToDouble(sc) * 100);
+                    try { Display.Apply(lastScalePercent); }
                     catch (Exception e) { Log.Write("échelle : " + e.Message); }
                 }
                 if (m.TryGetValue("resolution", out var res) && res is object[] wh && wh.Length == 2)
                 {
                     try { Display.SetResolution(Convert.ToInt32(wh[0]), Convert.ToInt32(wh[1])); }
                     catch (Exception e) { Log.Write("résolution : " + e.Message); }
+                    // Windows garde une échelle par mode : celle de l'hôte est redonnée après le changement
+                    if (lastScalePercent > 0)
+                        try { Display.Apply(lastScalePercent); } catch (Exception e) { Log.Write("échelle : " + e.Message); }
                 }
                 if (m.TryGetValue("stats", out var sv) && sv is bool verbose) verboseStats = verbose;
                 if (m.TryGetValue("framebuffer", out var fbv) && fbv is bool fb && fb != framebuffer)
@@ -264,6 +346,9 @@ namespace Vasistas.Agent
                     // l'hôte lit l'écran tel quel : le pointeur de Windows y serait visible en double
                     if (fb) Cursors.Hide(); else Cursors.Restore();
                 }
+                if (m.TryGetValue("clamp", out var cv) && cv is bool clamp) clampNew = clamp;
+                if (m.TryGetValue("notifications", out var nv) && nv is bool notify) toasts.SetEnabled(notify); // registre écrit seulement s'il change
+                if (m.TryGetValue("tray", out var tv) && tv is bool trayOn && trayOn != tray.Enabled) tray.SetEnabled(trayOn);
                 if (t == "display") return;
                 long nowHello = clock.ElapsedMilliseconds;
                 // l'hôte répète hello tant qu'il n'a pas de réponse : une rafale ne doit pas tout renvoyer
@@ -271,11 +356,13 @@ namespace Vasistas.Agent
                 lastHello = nowHello;
                 if (repeat) return;
                 ch.ClearQueue();
+                ch.Zstd = m.TryGetValue("zstd", out var zv) && zv is bool zstd && zstd && Zstd.Ready;
                 ch.HostReady = true;
+                captureWake.Set();
                 wasReady = true;
                 Send(new Dictionary<string, object>
                 {
-                    { "t", "hello" }, { "version", Version },
+                    { "t", "hello" }, { "version", Version }, { "agentVersion", AgentVersion },
                     { "screen", new[] { Native.GetSystemMetrics(Native.SM_CXSCREEN), Native.GetSystemMetrics(Native.SM_CYSCREEN) } },
                     { "dpi", (int)Native.GetDpiForSystem() },
                 });
@@ -283,10 +370,20 @@ namespace Vasistas.Agent
                 windows.Clear(); // tout renvoyer
                 iconsSent.Clear();
                 Scan();
+                tray.Resend();
                 return;
             }
             if (t == "launch") { Launch(m); return; }
             if (t == "debug.windows") { Explain(m); return; }
+            if (t == "bench.post")
+            {
+                // banc de l'hôte : un caractère posté à la fenêtre sans la mettre au premier plan
+                // (latence d'une fenêtre recouverte) ; bench.posted part juste après, dans l'ordre
+                var bw = Find(Int(m, "id"));
+                if (bw != null) Native.PostMessage(bw.Hwnd, Native.WM_CHAR, new IntPtr('a'), IntPtr.Zero);
+                Send(new Dictionary<string, object> { { "t", "bench.posted" }, { "id", Int(m, "id") }, { "i", Int(m, "i") } });
+                return;
+            }
             if (t == "resend")
             {
                 // l'hôte a perdu ces fenêtres (message manqué) : les lui renvoyer
@@ -299,9 +396,25 @@ namespace Vasistas.Agent
                 return;
             }
             if (t == "exec") { Exec(m); return; }
-            if (t == "probe") { Probe(m); return; }
             if (t == "clipboard") { clipboard.Apply(m); return; }
             if (t == "key") { Stats.KeysIn++; Input.Key(m); return; }
+            if (t == "theme")
+            {
+                Look.Theme(Bool(m, "dark"), m.TryGetValue("accent", out var ac) && ac is string accent ? accent.ToLowerInvariant() : null);
+                return;
+            }
+            if (t == "fonts") { Look.Fonts(Str(m, "smoothing") ?? "grayscale"); return; }
+            if (t == "windows.reset") { ResetAll(m.TryGetValue("max", out var mx) && mx != null ? Convert.ToDouble(mx) : 0.8); return; }
+            if (t == "notify.activate") { toasts.Activate(Int(m, "id")); return; }
+            if (t == "tray.click") { tray.Click(Str(m, "key"), Str(m, "button") ?? "left", Int(m, "x"), Int(m, "y")); return; }
+            if (t == "capture")
+            {
+                // profil de puissance de l'hôte : délai entre deux captures d'une fenêtre recouverte
+                int ms = Int(m, "occluded_ms");
+                if (ms > 0) occludedBaseMs = Math.Max(100, Math.Min(5000, ms));
+                timerWanted = Int(m, "timer_ms") > 0;
+                return;
+            }
 
             var tw = Find(Int(m, "id"));
             if (tw == null) return;
@@ -347,6 +460,13 @@ namespace Vasistas.Agent
                 case "window.resize":
                     Resize(tw, Int(m, "w"), Int(m, "h"));
                     // nouvelle géométrie envoyée tout de suite : l'hôte ne découpe pas l'ancienne
+                    Update(tw);
+                    RequestScan();
+                    break;
+                case "window.place":
+                    if (tw.Kind == "popup") break;
+                    Unmaximize(tw);
+                    Place(tw, Int(m, "x"), Int(m, "y"), Int(m, "w"), Int(m, "h"));
                     Update(tw);
                     RequestScan();
                     break;
@@ -418,25 +538,27 @@ namespace Vasistas.Agent
                 try
                 {
                     // fichier temporaire : -EncodedCommand est limité par la longueur de ligne (32 Ko)
-                    string file = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "vasistas-exec-" + req + ".ps1");
+                    string dir = System.IO.Path.GetTempPath();
+                    string file = System.IO.Path.Combine(dir, "vasistas-exec-" + req + ".ps1");
+                    string outFile = System.IO.Path.Combine(dir, "vasistas-exec-" + req + ".out");
                     System.IO.File.WriteAllText(file, script, new System.Text.UTF8Encoding(true));
+                    // sortie dans un fichier, pas dans un tube : un programme lancé par le script
+                    // (Start-Process) héritait du tube et l'exec ne rendait la main qu'à sa fermeture
+                    string cmd = "& '" + file + "' *>&1 | Out-File -FilePath '" + outFile + "' -Encoding utf8 -Width 4096; exit $LASTEXITCODE";
                     var psi = new ProcessStartInfo("powershell.exe",
-                        "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + file + "\"")
+                        "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"" + cmd + "\"")
                     {
                         UseShellExecute = false, CreateNoWindow = true,
-                        RedirectStandardOutput = true, RedirectStandardError = true,
-                        StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8,
                     };
                     using (var p = Process.Start(psi))
                     {
-                        var err = p.StandardError.ReadToEndAsync();
-                        string output = p.StandardOutput.ReadToEnd();
                         p.WaitForExit();
-                        output += err.Result;
+                        string output = System.IO.File.Exists(outFile) ? System.IO.File.ReadAllText(outFile) : "";
                         if (output.Length > 65536) output = output.Substring(output.Length - 65536);
                         reply["code"] = p.ExitCode;
                         reply["out"] = output;
                     }
+                    try { System.IO.File.Delete(outFile); } catch (Exception) { }
                     try { System.IO.File.Delete(file); } catch (Exception) { }
                 }
                 catch (Exception e)
@@ -446,64 +568,6 @@ namespace Vasistas.Agent
                 }
                 Send(reply);
             }) { IsBackground = true, Name = "vasistas-exec" }.Start();
-        }
-
-        /// <summary>
-        /// Sonde de latence vue de l'invité : touche injectée, puis relecture de l'écran
-        /// (composé par DWM) toutes les millisecondes jusqu'au changement.
-        /// </summary>
-        void Probe(Dictionary<string, object> m)
-        {
-            var tw = Find(Int(m, "id"));
-            if (tw == null) return;
-            RECT r = tw.Rect;
-            int req = Int(m, "req");
-            Native.ForceForeground(tw.Hwnd);
-            new Thread(() =>
-            {
-                Thread.Sleep(400);
-                var results = new List<double>();
-                using (var bmp = new System.Drawing.Bitmap(r.Width, r.Height))
-                using (var g = System.Drawing.Graphics.FromImage(bmp))
-                {
-                    for (int i = 0; i < Math.Max(1, Int(m, "n")); i++)
-                    {
-                        g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
-                        byte[] before = Snapshot(bmp);
-                        var sw = Stopwatch.StartNew();
-                        ushort sc = (ushort)(0x10 + i % 10);
-                        Native.SendInput(1, new[] { new INPUT { type = Native.INPUT_KEYBOARD, keyScan = sc, keyFlags = Native.KEYEVENTF_SCANCODE } }, Marshal.SizeOf<INPUT>());
-                        Native.SendInput(1, new[] { new INPUT { type = Native.INPUT_KEYBOARD, keyScan = sc, keyFlags = Native.KEYEVENTF_SCANCODE | Native.KEYEVENTF_KEYUP } }, Marshal.SizeOf<INPUT>());
-                        double ms = -1;
-                        while (sw.ElapsedMilliseconds < 500)
-                        {
-                            g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
-                            if (!Same(before, Snapshot(bmp))) { ms = sw.Elapsed.TotalMilliseconds; break; }
-                        }
-                        results.Add(ms);
-                        Thread.Sleep(150);
-                    }
-                }
-                results.Sort();
-                Send(new Dictionary<string, object> { { "t", "log" }, { "msg", "sonde invité (ms) : " + string.Join(" ", results.ConvertAll(x => x.ToString("F1"))) } });
-            }) { IsBackground = true }.Start();
-        }
-
-        static byte[] Snapshot(System.Drawing.Bitmap bmp)
-        {
-            var data = bmp.LockBits(new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height),
-                System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            var bytes = new byte[data.Stride * data.Height];
-            Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
-            bmp.UnlockBits(data);
-            return bytes;
-        }
-
-        static bool Same(byte[] a, byte[] b)
-        {
-            if (a.Length != b.Length) return false;
-            for (int i = 0; i < a.Length; i += 4) if (a[i] != b[i] || a[i + 1] != b[i + 1] || a[i + 2] != b[i + 2]) return false;
-            return true;
         }
 
         static string Quote(string s) =>
@@ -545,6 +609,80 @@ namespace Vasistas.Agent
             tw.NextCapture = 0;
         }
 
+        /// <summary>Restaure sans l'activer une fenêtre agrandie ou réduite dans l'invité.</summary>
+        static void Unmaximize(Tracked tw)
+        {
+            if (Native.IsZoomed(tw.Hwnd) || Native.IsIconic(tw.Hwnd)) Native.ShowWindow(tw.Hwnd, Native.SW_SHOWNOACTIVATE);
+        }
+
+        /// <summary>
+        /// Pose la zone visible de la fenêtre (sans les bordures invisibles) au rectangle donné, en
+        /// pixels physiques de l'écran de Windows. Ramenée dans l'écran : au-delà, SendInput ne
+        /// l'atteint pas.
+        /// </summary>
+        void Place(Tracked tw, int x, int y, int w, int h)
+        {
+            int sw = Native.GetSystemMetrics(Native.SM_CXSCREEN), sh = Native.GetSystemMetrics(Native.SM_CYSCREEN);
+            w = Math.Max(1, Math.Min(w, sw));
+            h = Math.Max(1, Math.Min(h, sh));
+            x = Math.Max(0, Math.Min(x, sw - w));
+            y = Math.Max(0, Math.Min(y, sh - h));
+            Native.GetWindowRect(tw.Hwnd, out RECT wr);
+            RECT b = Native.Bounds(tw.Hwnd);
+            Native.SetWindowPos(tw.Hwnd, IntPtr.Zero, x - (b.Left - wr.Left), y - (b.Top - wr.Top),
+                w + wr.Width - b.Width, h + wr.Height - b.Height, Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+            tw.NextCapture = 0;
+        }
+
+        /// <summary>Zone de travail de l'écran de Windows (tout l'écran, la barre des tâches étant masquée).</summary>
+        static RECT WorkArea()
+        {
+            if (Native.SystemParametersInfo(Native.SPI_GETWORKAREA, 0, out RECT r, 0) && r.Width > 0 && r.Height > 0) return r;
+            return new RECT { Right = Native.GetSystemMetrics(Native.SM_CXSCREEN), Bottom = Native.GetSystemMetrics(Native.SM_CYSCREEN) };
+        }
+
+        static bool OffScreen(RECT b) =>
+            b.Left < 0 || b.Top < 0 || b.Right > Native.GetSystemMetrics(Native.SM_CXSCREEN) || b.Bottom > Native.GetSystemMetrics(Native.SM_CYSCREEN);
+
+        /// <summary>
+        /// Taille ramenée à au plus `max` fois la zone de travail sur chaque axe, puis fenêtre centrée.
+        /// La taille minimale de l'application est respectée sans l'envoyer nous-mêmes : pendant
+        /// SetWindowPos, Windows envoie WM_WINDOWPOSCHANGING à la fenêtre, et DefWindowProc y
+        /// applique WM_GETMINMAXINFO. La taille obtenue est relue pour centrer.
+        /// </summary>
+        void Fit(Tracked tw, double max)
+        {
+            RECT wa = WorkArea();
+            RECT b = Native.Bounds(tw.Hwnd);
+            int w = Math.Max(1, Math.Min(b.Width, (int)(wa.Width * max)));
+            int h = Math.Max(1, Math.Min(b.Height, (int)(wa.Height * max)));
+            Place(tw, wa.Left + (wa.Width - w) / 2, wa.Top + (wa.Height - h) / 2, w, h);
+            RECT got = Native.Bounds(tw.Hwnd);
+            if (got.Width != w || got.Height != h)
+                Place(tw, wa.Left + Math.Max(0, (wa.Width - got.Width) / 2), wa.Top + Math.Max(0, (wa.Height - got.Height) / 2),
+                    got.Width, got.Height);
+        }
+
+        /// <summary>
+        /// `windows.reset` : fenêtres suivies (sauf popups et fenêtres réduites) restaurées,
+        /// ramenées à `max` fois la zone de travail au plus et centrées.
+        /// </summary>
+        void ResetAll(double max)
+        {
+            max = Math.Max(0.2, Math.Min(1.0, max));
+            int count = 0;
+            foreach (var tw in windows.Values.ToList())
+            {
+                if (tw.Kind == "popup" || Native.IsIconic(tw.Hwnd)) continue;
+                Unmaximize(tw);
+                Fit(tw, max);
+                Update(tw);
+                count++;
+            }
+            RequestScan();
+            Send(new Dictionary<string, object> { { "t", "windows.reset.done" }, { "count", count } });
+        }
+
         /// <summary>
         /// État vu par l'agent, pour `vasistas windows` : fenêtres suivies, fenêtres visibles
         /// qui en recouvrent, et avec `all` toutes les fenêtres visibles avec la raison du choix.
@@ -563,7 +701,7 @@ namespace Vasistas.Agent
                 RECT r = tracked ? tw.Rect : Native.Bounds(h);
                 Native.GetWindowThreadProcessId(h, out uint pid);
                 string exe = "";
-                try { exe = Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { }
+                try { using (var p = Process.GetProcessById((int)pid)) exe = p.ProcessName; } catch (Exception) { }
                 list.Add(new Dictionary<string, object>
                 {
                     { "id", h.ToInt64() }, { "class", Native.ClassName(h) }, { "exe", exe }, { "title", Native.Title(h) },
@@ -828,7 +966,7 @@ namespace Vasistas.Agent
         bool Wanted(IntPtr h)
         {
             if (IgnoreReason(h, out bool restore) != null) return false;
-            if (restore) Native.ShowWindow(h, Native.SW_RESTORE);
+            if (restore) Native.ShowWindowAsync(h, Native.SW_RESTORE);
             return true;
         }
 
@@ -941,11 +1079,15 @@ namespace Vasistas.Agent
                     maximized = true;
                     Native.ShowWindow(h, Native.SW_RESTORE);
                 }
-                EnsureOnScreen(tw);
+                // fenêtre née plus grande que l'écran de Windows, ou en partie dehors (taille
+                // mémorisée sur un autre écran) : ramenée dedans avant que l'hôte ne la voie
+                if (!maximized && clampNew && OffScreen(Native.Bounds(h))) Fit(tw, ClampMax);
+                else EnsureOnScreen(tw);
             }
             tw.Rect = Native.Bounds(h);
             tw.Nc = popup ? 0 : Native.NativeCaption(h);
             tw.Minimized = Native.IsIconic(h);
+            tw.Capture.FrameArrived = () => CaptureSoon(tw);
             windows[h] = tw;
             if (!popup) lastActiveId = Native.GetForegroundWindow() == h ? tw.Id : lastActiveId;
             SendNew(tw, maximized);
@@ -969,6 +1111,8 @@ namespace Vasistas.Agent
                 { "rect", new[] { tw.Rect.Left, tw.Rect.Top, tw.Rect.Width, tw.Rect.Height } },
                 { "kind", tw.Kind }, { "owner", tw.Owner }, { "maximized", maximized },
                 { "occluded", tw.Occluded }, { "minimized", tw.Minimized }, { "nc", tw.Nc },
+                // écran d'accueil (Word, Excel…) : pas de bord redimensionnable, hors mémoire de placement
+                { "sizable", (Native.Style(tw.Hwnd) & Native.WS_THICKFRAME) != 0 },
                 { "dpi", tw.Dpi = (int)Native.GetDpiForWindow(tw.Hwnd) },
             });
         }
@@ -981,7 +1125,7 @@ namespace Vasistas.Agent
             {
                 if (Native.IsZoomed(h))
                 {
-                    Native.ShowWindow(h, Native.SW_RESTORE);
+                    Native.ShowWindowAsync(h, Native.SW_RESTORE);
                     Send(new Dictionary<string, object> { { "t", "window.request" }, { "id", tw.Id }, { "action", "maximize" } });
                 }
                 bool min = Native.IsIconic(h);
@@ -1100,8 +1244,17 @@ namespace Vasistas.Agent
             Native.SendInput(1, new[] { i }, Size);
         }
 
+        static readonly HashSet<int> held = new HashSet<int>();
+
+        /// <summary>Hôte perdu en plein clic : bouton relâché, sinon tout devient un glisser.</summary>
+        public static void ReleaseButtons()
+        {
+            foreach (int b in held.ToArray()) Button(b, false);
+        }
+
         public static void Button(int button, bool down)
         {
+            if (down) held.Add(button); else held.Remove(button);
             uint flags;
             int data = 0;
             switch (button)

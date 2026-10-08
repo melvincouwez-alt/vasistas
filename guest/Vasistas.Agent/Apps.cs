@@ -38,7 +38,8 @@ namespace Vasistas.Agent
         public static AppInfo Of(IntPtr hwnd)
         {
             Native.GetWindowThreadProcessId(hwnd, out uint pid);
-            if (byPid.TryGetValue(pid, out var known)) return known;
+            lock (byPid)
+                if (byPid.TryGetValue(pid, out var known)) return known;
             string exe = ExePath(pid, out string aumid);
             var info = new AppInfo { Exe = exe ?? "", ImagePath = exe, Id = "windows", Name = "Windows" };
             if (exe != null)
@@ -66,12 +67,25 @@ namespace Vasistas.Agent
                 // appli empaquetée : lancée par son identifiant, WindowsApps n'est pas exécutable directement
                 if (aumid != null) info.Exe = @"shell:AppsFolder\" + aumid;
             }
-            if (byPid.Count > 512) byPid.Clear();
-            byPid[pid] = info;
+            lock (byPid)
+            {
+                if (byPid.Count > 512) byPid.Clear();
+                byPid[pid] = info;
+            }
             return info;
         }
 
-        static string ExePath(uint pid, out string aumid)
+        /// <summary>Application déjà vue (fenêtre suivie) dont le nom lisible est `name`, sinon null.</summary>
+        public static AppInfo ByName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            lock (byPid)
+                foreach (var a in byPid.Values)
+                    if (string.Equals(a.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)) return a;
+            return null;
+        }
+
+        internal static string ExePath(uint pid, out string aumid)
         {
             aumid = null;
             var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
@@ -88,14 +102,15 @@ namespace Vasistas.Agent
             finally { CloseHandle(h); }
         }
 
-        /// <summary>Icône de l'exécutable en PNG 256x256 (ou la plus grande disponible), base64.</summary>
-        public static string IconPng(string exe)
+        /// <summary>Icône de l'exécutable en PNG `max`x`max` (256 par défaut, ou la plus grande disponible en dessous), base64.</summary>
+        public static string IconPng(string exe, int max = 256)
         {
             if (string.IsNullOrEmpty(exe) || exe.StartsWith("shell:")) return null;
             var icons = new IntPtr[1];
             var ids = new uint[1];
-            foreach (int size in new[] { 256, 128, 64, 48, 32 })
+            foreach (int size in new[] { 256, 128, 64, 48, 32, 16 })
             {
+                if (size > max) continue;
                 if (PrivateExtractIcons(exe, 0, size, size, icons, ids, 1, 0) == 0 || icons[0] == IntPtr.Zero) continue;
                 try
                 {

@@ -1,0 +1,11 @@
+{
+  "Aucune carte graphique dédiée détectée : la carte est absente ou désactivée en ce moment (mode Éco, cardwire…).": "No dedicated graphics card detected: the card is missing or currently turned off (Eco mode, cardwire…).",
+  "La carte graphique dédiée est désactivée (mode économie d'ASUS). Réactivez-la avec asusctl ou Armoury Crate.": "The dedicated graphics card is turned off (ASUS power-saving mode). Turn it back on with asusctl or Armoury Crate.",
+  "L'IOMMU n'est pas actif : activez AMD-Vi / VT-d dans le BIOS.": "IOMMU is not active: turn on AMD-Vi / VT-d in the BIOS.",
+  "La carte graphique dédiée partage son groupe IOMMU avec d'autres périphériques : impossible de la prêter seule à Windows.": "The dedicated graphics card shares its IOMMU group with other devices: it cannot be lent to Windows on its own.",
+  "L'assistant système n'est pas installé.": "The system helper is not installed.",
+  "Un écran externe est branché sur la carte graphique dédiée : la carte ne peut pas être prêtée à Windows tant que cet écran l'utilise.": "An external screen is connected to the dedicated graphics card: the card cannot be lent to Windows while this screen uses it.",
+  "La carte graphique dédiée est utilisée par une application Linux.": "The dedicated graphics card is being used by a Linux application.",
+  "L'ordinateur est sur batterie.": "The computer is on battery.",
+  "Prête : Windows utilisera la carte graphique dédiée à son prochain démarrage.": "Ready: Windows will use the dedicated graphics card the next time it starts."
+}

@@ -9,15 +9,16 @@ import re
 from pathlib import Path
 
 from . import control
+from .i18n import N_
 from .vm import DATA
 
 SCRIPT = Path(__file__).resolve().parent / "guest" / "apps.ps1"
 CACHE = DATA / "installed.json"
 CHUNK = 60000  # exec renvoie au plus 64 Ko
 CATEGORIES = {
-    "user": "Installées",
-    "windows": "Applications Windows",
-    "system": "Système et administration",
+    "user": N_("Installées"),
+    "windows": N_("Applications Windows"),
+    "system": N_("Système et administration"),
 }
 
 

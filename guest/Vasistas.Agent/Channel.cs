@@ -18,11 +18,15 @@ namespace Vasistas.Agent
     {
         const string PortPath = @"\\.\Global\org.vasistas.0";
         const byte TJson = 1, TTile = 2;
-        const int MaxHostFrame = 1 << 20; // l'hôte n'envoie que de petits messages JSON
+        // JSON de l'hôte ; le plus gros est une image du presse-papiers (24 Mio de PNG, en base64)
+        const int MaxHostFrame = 40 << 20;
 
         public readonly ConcurrentQueue<Dictionary<string, object>> Inbox = new ConcurrentQueue<Dictionary<string, object>>();
         public readonly AutoResetEvent InboxEvent = new AutoResetEvent(false);
         public volatile bool HostReady;
+        /// <summary>L'hôte décode les tuiles zstd (champ zstd de son hello) et la DLL est chargée.</summary>
+        public volatile bool Zstd;
+        public const byte EncDeflate = 1, EncZstd = 2;
 
         readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
         readonly object writeLock = new object();
@@ -83,10 +87,14 @@ namespace Vasistas.Agent
                         int r = ReadSome(readBuf, 4096); // lectures plus grandes : ERROR_NO_SYSTEM_RESOURCES vu avec vioserial
                         if (r == 0)
                         {
-                            Thread.Sleep(50); // hôte absent : le port renvoie 0 octet
+                            // hôte absent : le port renvoie 0 octet. Avant le hello, 250 ms suffisent
+                            // (l'hôte le répète chaque seconde, les octets attendent dans le pilote) ;
+                            // après, 50 ms comme avant : le pilote ne devrait jamais rendre 0 octet à
+                            // un hôte connecté, mais rien ne le garantit pour toutes ses versions
+                            Thread.Sleep(HostReady ? 50 : 250);
                             continue;
                         }
-                        for (int i = 0; i < r; i++) pending.Add(readBuf[i]);
+                        pending.AddRange(new ArraySegment<byte>(readBuf, 0, r));
                         Parse(pending);
                     }
                 }
@@ -162,7 +170,9 @@ namespace Vasistas.Agent
 
         // -- écriture --
 
-        public void Send(Dictionary<string, object> msg)
+        public void Send(Dictionary<string, object> msg) => Write(JsonFrame(msg));
+
+        byte[] JsonFrame(Dictionary<string, object> msg)
         {
             byte[] body = System.Text.Encoding.UTF8.GetBytes(json.Serialize(msg));
             var frame = new byte[7 + body.Length];
@@ -170,10 +180,10 @@ namespace Vasistas.Agent
             BitConverter.GetBytes(body.Length + 1).CopyTo(frame, 2);
             frame[6] = TJson;
             body.CopyTo(frame, 7);
-            Write(frame);
+            return frame;
         }
 
-        public void SendTile(uint id, int x, int y, int w, int h, byte[] payload, int payloadLen, bool deflate)
+        public void SendTile(uint id, int x, int y, int w, int h, byte[] payload, int payloadLen, byte enc)
         {
             var frame = new byte[7 + 13 + payloadLen];
             frame[0] = (byte)'V'; frame[1] = (byte)'S';
@@ -184,7 +194,7 @@ namespace Vasistas.Agent
             BitConverter.GetBytes((ushort)y).CopyTo(frame, 13);
             BitConverter.GetBytes((ushort)w).CopyTo(frame, 15);
             BitConverter.GetBytes((ushort)h).CopyTo(frame, 17);
-            frame[19] = (byte)(deflate ? 1 : 0);
+            frame[19] = enc;
             Buffer.BlockCopy(payload, 0, frame, 20, payloadLen);
             Write(frame, droppable: true);
         }
@@ -209,12 +219,7 @@ namespace Vasistas.Agent
         /// <summary>Message envoyé même sans hello de l'hôte (annonce de démarrage de l'agent).</summary>
         public void Announce(Dictionary<string, object> msg)
         {
-            byte[] body = System.Text.Encoding.UTF8.GetBytes(json.Serialize(msg));
-            var frame = new byte[7 + body.Length];
-            frame[0] = (byte)'V'; frame[1] = (byte)'S';
-            BitConverter.GetBytes(body.Length + 1).CopyTo(frame, 2);
-            frame[6] = TJson;
-            body.CopyTo(frame, 7);
+            var frame = JsonFrame(msg);
             Interlocked.Add(ref queuedBytes, frame.Length);
             outbox.Enqueue(frame);
             outboxEvent.Set();
@@ -300,12 +305,9 @@ namespace Vasistas.Agent
         public static extern bool WriteFile(SafeFileHandle h, IntPtr buf, uint count, IntPtr written, IntPtr ov);
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetOverlappedResult(SafeFileHandle h, IntPtr ov, out uint done, bool wait);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool CancelIoEx(SafeFileHandle h, IntPtr ov);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         public static extern IntPtr CreateEvent(IntPtr sec, bool manual, bool initial, string name);
         [DllImport("kernel32.dll")] public static extern bool ResetEvent(IntPtr h);
-        [DllImport("kernel32.dll")] public static extern uint WaitForSingleObject(IntPtr h, uint ms);
     }
 
     static class Log

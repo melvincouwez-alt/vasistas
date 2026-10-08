@@ -16,6 +16,8 @@ import logging
 import subprocess
 from pathlib import Path
 
+from .i18n import N_
+
 log = logging.getLogger(__name__)
 
 PCI = Path("/sys/bus/pci/devices")
@@ -25,15 +27,19 @@ DISCRETE_VENDORS = {"0x10de": "NVIDIA", "0x1002": "AMD", "0x8086": "Intel"}
 
 # états, du plus bloquant au prêt ; message pour l'application compagnon
 MESSAGES = {
-    "absent": "Aucune carte graphique dédiée détectée : absente, ou coupée en ce moment (mode Éco, cardwire…).",
-    "disabled": "La carte graphique dédiée est coupée (mode économie d'ASUS). Réactive-la avec asusctl ou Armoury Crate.",
-    "iommu": "L'IOMMU n'est pas actif : active AMD-Vi / VT-d dans le BIOS.",
-    "group": "La carte partage son groupe IOMMU avec d'autres périphériques : impossible de la prêter seule.",
-    "helper": "L'assistant système n'est pas installé.",
-    "screens": "Un écran externe est branché sur cette carte : elle ne peut pas être prêtée tant qu'il l'utilise.",
-    "busy": "La carte est utilisée par une application Linux.",
-    "battery": "L'ordinateur est sur batterie.",
-    "ready": "Prête : Windows l'utilisera au prochain démarrage.",
+    "absent": N_("Aucune carte graphique dédiée détectée : la carte est absente ou désactivée en ce moment (mode "
+                 "Éco, cardwire…)."),
+    "disabled": N_("La carte graphique dédiée est désactivée (mode économie d'ASUS). Réactivez-la avec asusctl "
+                   "ou Armoury Crate."),
+    "iommu": N_("L'IOMMU n'est pas actif : activez AMD-Vi / VT-d dans le BIOS."),
+    "group": N_("La carte graphique dédiée partage son groupe IOMMU avec d'autres périphériques : impossible de la "
+                "prêter seule à Windows."),
+    "helper": N_("L'assistant système n'est pas installé."),
+    "screens": N_("Un écran externe est branché sur la carte graphique dédiée : la carte ne peut "
+                  "pas être prêtée à Windows tant que cet écran l'utilise."),
+    "busy": N_("La carte graphique dédiée est utilisée par une application Linux."),
+    "battery": N_("L'ordinateur est sur batterie."),
+    "ready": N_("Prête : Windows utilisera la carte graphique dédiée à son prochain démarrage."),
 }
 
 

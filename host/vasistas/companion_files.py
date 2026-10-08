@@ -1,101 +1,109 @@
-"""Page « Fichiers » de l'application compagnon : extensions ouvertes dans Windows (files.py)."""
+"""Section « Ouvrir avec Windows » (page Fichiers) du compagnon : extensions ouvertes dans Windows (files.py)."""
 
 import re
 import threading
 
-from gi.repository import GLib, Granite, Gtk
+from gi.repository import GLib, Gtk
 
 from . import desktop, files
-from .companion_common import Page, dim
+from .companion_common import Section, card, clear, dim, mode_chip
+from .i18n import _
 
 THEME_ICONS = {app: icon for _, app, _, icon in desktop.APPS}
 
 
-class FilesPage(Page):
+class FilesPage(Section):
     __gtype_name__ = "VasistasFilesPage"
 
     def __init__(self, win):
-        super().__init__("document-open", "Fichiers",
-                         "Les fichiers de ces types s'ouvrent dans les applications Windows, d'un "
-                         "double-clic dans Fichiers.")
+        super().__init__("document-open", _("Fichiers"),
+                         _("Les fichiers des types listés ci-dessous s'ouvrent dans les applications Windows par un "
+                           "double-clic dans l'application Fichiers."))
         self.win = win
         self.busy = False
-        reset = Gtk.Button(label="Choix par défaut",
-                           tooltip_text="Office et Power BI dans Windows, le reste sous Linux")
-        reset.connect("clicked", lambda *_: self.run(lambda: files.apply(dict(files.DEFAULTS)),
-                                                     "Choix par défaut rétablis"))
+        self.header(_("Ouvrir avec Windows"))
+        reset = Gtk.Button(label=_("Rétablir les choix par défaut"),
+                           tooltip_text=_("Ouvrir les fichiers Office et Power BI dans Windows, et les autres fichiers "
+                                          "sous Linux"))
+        reset.connect("clicked", lambda *_a: self.run(lambda: files.apply(dict(files.DEFAULTS)),
+                                                      _("Choix par défaut rétablis")))
         self.get_action_area().append(reset)
-        self.cards = self.add(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6))
-        self.add(dim("Windows ne voit que les dossiers partagés (page Dossiers). Pour un fichier rangé "
-                     "ailleurs, Vasistas propose d'en ouvrir une copie dans Téléchargements ou de "
-                     "partager son dossier. Une extension retirée revient à l'application qui "
-                     "l'ouvrait avant."))
+        self.cards = self.add(card())
+        self.add(dim(_("Windows n'a accès qu'aux dossiers partagés. Pour un fichier situé dans un autre dossier, "
+                       "Vasistas propose d'en ouvrir une copie.")))
         self.fill()
 
     def fill(self):
-        child = self.cards.get_first_child()
-        while child:
-            nxt = child.get_next_sibling()
-            self.cards.remove(child)
-            child = nxt
+        clear(self.cards)
         desig = files.designations()
         for app, name, exts in files.catalog(desig):
-            self.cards.append(self.card(app, name, exts, desig))
+            self.cards.append(self.app_row(app, name, exts, desig))
         return False
 
-    def card(self, app, name, exts, desig):
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=6)
-        card.add_css_class("card")
-        card.add_css_class("rounded")
-        head = Gtk.Box(spacing=12, margin_start=12, margin_end=8, margin_top=8)
-        icon = Gtk.Image(pixel_size=32)
+    def app_row(self, app, name, exts, desig):
+        """Une ligne par application : ses extensions en étiquettes, « Modifier » pour les choisir."""
+        line = Gtk.Box(spacing=12, margin_start=6, margin_end=6, margin_top=6, margin_bottom=6)
+        icon = Gtk.Image(pixel_size=32, valign=Gtk.Align.CENTER)
         path = desktop.app_icon_path(app)
         if path.exists():
             icon.set_from_file(str(path))
         else:
             icon.set_from_icon_name(THEME_ICONS.get(app, "application-x-executable"))
-        head.append(icon)
-        head.append(Gtk.Label(label=name, xalign=0, hexpand=True))
-        head.append(self.add_button(app, name))
-        card.append(head)
+        line.append(icon)
+        texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True, valign=Gtk.Align.CENTER)
+        texts.append(Gtk.Label(label=name, xalign=0))
+        chips = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=10,
+                            column_spacing=4, row_spacing=4)
+        active = [e for e in exts if desig.get(e) == app]
+        for ext in active:
+            chips.append(mode_chip(None, f".{ext}"))
+        if not active:
+            chips.append(dim(_("Aucun type de fichier associé : les fichiers correspondants s'ouvrent sous Linux")))
+        texts.append(chips)
+        line.append(texts)
+        line.append(self.edit_button(app, name, exts, desig))
+        return Gtk.ListBoxRow(activatable=False, child=line)
 
-        flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=12,
-                           column_spacing=18, row_spacing=6, homogeneous=True,
-                           margin_start=12, margin_end=12, margin_bottom=12)
+    def edit_button(self, app, name, exts, desig):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_start=8, margin_end=8,
+                      margin_top=8, margin_bottom=8)
+        flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=4,
+                           column_spacing=12, row_spacing=4, homogeneous=True)
         for ext in exts:
             tb = Gtk.CheckButton(label=f".{ext}", active=desig.get(ext) == app)
             other = desig.get(ext)
             if other and other != app:
-                tb.set_tooltip_text(f"Aujourd'hui ouvert dans {files.app_name(other)}")
+                tb.set_tooltip_text(_("Actuellement ouvert dans {name}", name=files.app_name(other)))
             elif other == app:
-                tb.set_tooltip_text(f"Ouvert dans {name} (Windows)")
+                tb.set_tooltip_text(_("Ouvert dans {name} (Windows)", name=name))
             else:
-                tb.set_tooltip_text("Ouvert sous Linux")
+                tb.set_tooltip_text(_("Ouvert sous Linux"))
             tb.connect("toggled", self.on_toggle, ext, app, name)
             flow.append(tb)
-        card.append(flow)
-        return card
-
-    def add_button(self, app, name):
-        entry = Gtk.Entry(placeholder_text="extension, ex. csv", width_chars=16)
-        ok = Gtk.Button(label="Ajouter")
+        box.append(flow)
+        entry = Gtk.Entry(placeholder_text=_("Extension, par exemple csv"), width_chars=16, hexpand=True)
+        ok = Gtk.Button(label=_("Ajouter"))
         ok.add_css_class("suggested-action")
-        pop_box = Gtk.Box(spacing=6, margin_start=6, margin_end=6, margin_top=6, margin_bottom=6)
-        pop_box.append(entry)
-        pop_box.append(ok)
-        pop = Gtk.Popover(child=pop_box)
-        btn = Gtk.MenuButton(icon_name="list-add-symbolic", popover=pop, valign=Gtk.Align.CENTER,
-                             tooltip_text=f"Ouvrir une autre extension dans {name}")
-        btn.add_css_class(Granite.STYLE_CLASS_FLAT)
+        add_box = Gtk.Box(spacing=6)
+        add_box.append(entry)
+        add_box.append(ok)
+        box.append(add_box)
+        pop = Gtk.Popover(child=box)
+        # libellé et flèche (l'icône par défaut du thème est un engrenage)
+        inner = Gtk.Box(spacing=6)
+        inner.append(Gtk.Label(label=_("Modifier")))
+        inner.append(Gtk.Image(icon_name="pan-down-symbolic"))
+        btn = Gtk.MenuButton(child=inner, popover=pop, valign=Gtk.Align.CENTER,
+                             tooltip_text=_("Types de fichiers ouverts dans {name}", name=name))
 
-        def add(*_):
+        def add(*_a):
             ext = files.normalize(entry.get_text())
             if not re.fullmatch(r"[a-z0-9_-]{1,12}", ext):
-                self.win.notify("Extension invalide")
+                self.win.notify(_("Extension invalide"))
                 return
             pop.popdown()
             entry.set_text("")
-            self.run(lambda: files.set_designation(ext, app), f".{ext} s'ouvre dans {name}")
+            self.run(lambda: files.set_designation(ext, app), _(".{ext} s'ouvre dans {name}", ext=ext, name=name))
         entry.connect("activate", add)
         ok.connect("clicked", add)
         return btn
@@ -104,7 +112,8 @@ class FilesPage(Page):
         if self.busy:
             return
         on = tb.get_active()
-        msg = f".{ext} s'ouvre dans {name}" if on else f".{ext} ne s'ouvre plus dans {name}"
+        msg = _(".{ext} s'ouvre dans {name}", ext=ext, name=name) if on else \
+            _(".{ext} ne s'ouvre plus dans {name}", ext=ext, name=name)
         self.run(lambda: files.set_designation(ext, app if on else None), msg)
 
     def run(self, work, message):
@@ -119,7 +128,7 @@ class FilesPage(Page):
                 work()
                 GLib.idle_add(self.win.notify, message)
             except Exception as e:  # noqa: BLE001
-                GLib.idle_add(self.win.notify, f"Échec : {e}")
+                GLib.idle_add(self.win.notify, _("Échec : {e}", e=e))
             GLib.idle_add(self.done)
         threading.Thread(target=job, name="vasistas-files", daemon=True).start()
 

@@ -1,0 +1,14 @@
+{
+  "en marche (pid {pid})": "running (pid {pid})",
+  "installation de Windows : la fenêtre QEMU se ferme automatiquement à la fin": "installing Windows: the QEMU window closes automatically when done",
+  "QEMU terminé (code {rc})": "QEMU finished (code {rc})",
+  "{disk} (lancer `vasistas vm install`)": "{disk} (run `vasistas vm install`)",
+  "la VM tourne déjà": "the VM is already running",
+  "{disk} existe déjà (--force pour réinstaller)": "{disk} already exists (--force to reinstall)",
+  "arrêtée": "stopped",
+  "non installée": "not installed",
+  "fichiers manquants :": "missing files:",
+  "carte graphique dédiée non prêtée : {e}": "dedicated graphics card not lent: {e}",
+  "installation interrompue ({reason}) : disque supprimé, relancez l'installation": "installation interrupted ({reason}): disk removed, restart the installation",
+  "QEMU arrêté": "QEMU stopped"
+}

@@ -1,9 +1,11 @@
 """Banc de référence : coût au repos et latence, pour juger chaque réglage sur des chiffres.
 
-`vasistas bench [--idle S] [--latency N] [--label TEXTE]`
+`vasistas bench [--idle S] [--latency N] [--occluded N] [--dwm S] [--label TEXTE]`
 - repos : processeur de QEMU (fils vCPU / autres) et de l'hôte GTK, mémoire résidente ;
 - latence : touche envoyée -> première zone modifiée de l'écran, dans le Bloc-notes
-  (ouvert pour l'occasion puis refermé s'il ne l'était pas).
+  (ouvert pour l'occasion puis refermé s'il ne l'était pas) ;
+- dwm : compositions par seconde du bureau de Windows (DwmFlush) ;
+- occluded : latence d'une fenêtre recouverte dans Windows (console derrière le Bloc-notes).
 Chaque mesure est ajoutée à docs/perf.jsonl (une ligne JSON) avec son étiquette.
 """
 
@@ -93,11 +95,75 @@ def idle(seconds=20):
     }
 
 
-def _notepad():
+def _window(fragment):
+    """Fenêtre suivie dont le titre contient `fragment` (hors menus), ou None."""
     for w in control.request({"windows": True}, timeout=5).get("windows", []):
-        if "Bloc-notes" in (w.get("title") or "") and w.get("kind") != "popup":
-            return w["id"]
+        if fragment.lower() in (w.get("title") or "").lower() and w.get("kind") != "popup":
+            return w
     return None
+
+
+def _open(cmd, args, fragment, timeout=20):
+    """(fenêtre, ouverte par nous) : lancée si aucune fenêtre au titre `fragment` n'est suivie."""
+    w = _window(fragment)
+    if w is not None:
+        return w, False
+    control.request({"send": {"t": "launch", "req": 0, "cmd": cmd, "args": args}}, timeout=5)
+    deadline = time.monotonic() + timeout
+    while w is None and time.monotonic() < deadline:
+        time.sleep(0.5)
+        w = _window(fragment)
+    if w is None:
+        raise RuntimeError(f"{fragment} introuvable")
+    time.sleep(2)
+    return w, True
+
+
+DWM_PS = r"""
+Add-Type @"
+using System;using System.Diagnostics;using System.Runtime.InteropServices;using System.Threading;
+public static class Dwm {
+ [DllImport("dwmapi.dll")] static extern int DwmFlush();
+ [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr a, int x,int y,int w,int hh,uint f);
+ public static double Run(long hh, int secs){
+  var h=new IntPtr(hh); bool stop=false;
+  var t=new Thread(()=>{int i=0; while(!stop){ SetWindowPos(h,IntPtr.Zero,100+(i%%200),100+(i%%100),900,600,0x14); i+=7; Thread.Sleep(4);} });
+  t.Start(); DwmFlush(); int n=0; var sw=Stopwatch.StartNew();
+  while(sw.Elapsed.TotalSeconds<secs){ DwmFlush(); n++; }
+  stop=true; t.Join();
+  return n/sw.Elapsed.TotalSeconds;
+ }}
+"@
+[Dwm]::Run(%d, %d).ToString("F1", [Globalization.CultureInfo]::InvariantCulture)
+"""
+
+
+def dwm_rate(wid, secs=4):
+    """Compositions de DWM par seconde pendant qu'une fenêtre bouge sans arrêt (DwmFlush)."""
+    res = control.request({"exec": DWM_PS % (wid, secs)}, timeout=secs + 60)
+    try:
+        return float((res.get("out") or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return None
+
+
+def occluded(notepad_wid, n=10):
+    """Latence d'une fenêtre recouverte dans Windows : console classique (cmd) posée derrière le
+    Bloc-notes, caractère posté par l'agent (sans premier plan) -> image reçue par les tuiles.
+    La console est plus haute que le Bloc-notes pour rester en partie visible sous Linux, sinon
+    l'agent cesse de la capturer (hosthidden)."""
+    w, opened = _open("conhost.exe", ["cmd.exe"], "conhost")
+    wid = w["id"]
+    try:
+        for msg in ({"t": "window.place", "id": wid, "x": 400, "y": 100, "w": 1000, "h": 1300},
+                    {"t": "window.place", "id": notepad_wid, "x": 0, "y": 0, "w": 1400, "h": 900},
+                    {"t": "window.activate", "id": notepad_wid}):
+            control.request({"send": msg}, timeout=5)
+        time.sleep(2)
+        return control.request({"bench_occluded": {"wid": wid, "n": n}}, timeout=n * 4 + 10)
+    finally:
+        if opened:
+            control.request({"send": {"t": "window.close", "id": wid}}, timeout=5)
 
 
 IDLE_BEFORE_LATENCY_S = 120
@@ -116,39 +182,37 @@ def desktop_idle_s():
         return None
 
 
-def latency(n=30, force=False):
-    """Latence touche -> image dans le Bloc-notes. Le banc prend le premier plan et tape :
-    refusé si quelqu'un s'est servi de Windows depuis moins de IDLE_BEFORE_LATENCY_S."""
+def latency(n=30, force=False, occluded_n=0, dwm_s=0):
+    """Latence touche -> image dans le Bloc-notes, cadence de DWM et latence d'une fenêtre
+    recouverte. Le banc prend le premier plan et tape : refusé si quelqu'un s'est servi du poste
+    depuis moins de IDLE_BEFORE_LATENCY_S."""
     idle_s = desktop_idle_s()
     if idle_s is None:
         idle_s = control.request({"status": True}, timeout=5).get("idle_s") or 0
     if not force and idle_s < IDLE_BEFORE_LATENCY_S:
         return {"skipped": f"poste utilisé il y a {idle_s} s (banc de latence reporté)"}
-    wid = _notepad()
-    opened = False
-    if wid is None:
-        control.request({"send": {"t": "launch", "req": 0, "cmd": "notepad", "args": []}}, timeout=5)
-        opened = True
-        deadline = time.monotonic() + 20
-        while wid is None and time.monotonic() < deadline:
-            time.sleep(0.5)
-            wid = _notepad()
-        if wid is None:
-            return {"error": "Bloc-notes introuvable"}
-        time.sleep(2)
+    w, opened = _open("notepad", [], "Bloc-notes")
+    wid = w["id"]
     try:
-        return control.request({"bench": n, "wid": wid}, timeout=n * 2 + 30)
+        res = {}
+        if n:
+            res = control.request({"bench": n, "wid": wid}, timeout=n * 2 + 30)
+        if dwm_s:
+            res["dwm_per_s"] = dwm_rate(wid, dwm_s)
+        if occluded_n:
+            res["occluded"] = occluded(wid, occluded_n)
+        return res
     finally:
         if opened:
             control.request({"send": {"t": "window.close", "id": wid}}, timeout=5)
 
 
-def run(idle_s=20, latency_n=30, label="", force=False):
+def run(idle_s=20, latency_n=30, label="", force=False, occluded_n=0, dwm_s=0):
     res = {"when": time.strftime("%Y-%m-%d %H:%M:%S"), "label": label}
     if idle_s:
         res["idle"] = idle(idle_s)
-    if latency_n:
-        res["latency"] = latency(latency_n, force)
+    if latency_n or occluded_n or dwm_s:
+        res["latency"] = latency(latency_n, force, occluded_n, dwm_s)
     try:
         res["host"] = control.request({"stats": True}, timeout=5)
     except OSError:

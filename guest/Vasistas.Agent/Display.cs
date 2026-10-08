@@ -67,10 +67,6 @@ namespace Vasistas.Agent
         static bool modesLogged;
 
         /// <summary>
-        /// Résolution de l'écran de l'invité, si le pilote propose ce mode exact.
-        /// Sinon on garde la résolution actuelle (l'hôte étire alors légèrement).
-        /// </summary>
-        /// <summary>
         /// Écran de Windows au moins aussi grand que l'écran hôte (pixels physiques). Le pilote
         /// virtio-gpu ne propose qu'une liste fixe de modes : sans le mode exact (2880x1800 du
         /// portable, par exemple), on prend le plus petit mode qui le contient. Sinon une fenêtre

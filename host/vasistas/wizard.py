@@ -22,19 +22,21 @@ gi.require_version("Granite", "7.0")
 from gi.repository import Gio, GLib, Granite, Gtk  # noqa: E402
 
 from . import control, vm, winiso  # noqa: E402
-from .app import APP_ID  # noqa: E402
+from .companion_common import clear  # noqa: E402
+from .i18n import N_, _  # noqa: E402
+from .winctl import APP_ID  # noqa: E402
 
 VIRTIO_URL = ("https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/"
               "stable-virtio/virtio-win.iso")
 MIN_FREE_GB = 100
 # dossiers proposés au partage : (dossier spécial XDG, nom affiché)
 SPECIAL = [
-    (GLib.UserDirectory.DIRECTORY_DOCUMENTS, "Documents"),
-    (GLib.UserDirectory.DIRECTORY_DOWNLOAD, "Téléchargements"),
-    (GLib.UserDirectory.DIRECTORY_DESKTOP, "Bureau"),
-    (GLib.UserDirectory.DIRECTORY_PICTURES, "Images"),
-    (GLib.UserDirectory.DIRECTORY_MUSIC, "Musique"),
-    (GLib.UserDirectory.DIRECTORY_VIDEOS, "Vidéos"),
+    (GLib.UserDirectory.DIRECTORY_DOCUMENTS, N_("Documents")),
+    (GLib.UserDirectory.DIRECTORY_DOWNLOAD, N_("Téléchargements")),
+    (GLib.UserDirectory.DIRECTORY_DESKTOP, N_("Bureau")),
+    (GLib.UserDirectory.DIRECTORY_PICTURES, N_("Images")),
+    (GLib.UserDirectory.DIRECTORY_MUSIC, N_("Musique")),
+    (GLib.UserDirectory.DIRECTORY_VIDEOS, N_("Vidéos")),
 ]
 
 
@@ -59,14 +61,6 @@ def check_line(ok, title, hint=""):
     return box
 
 
-def clear(box):
-    child = box.get_first_child()
-    while child:
-        nxt = child.get_next_sibling()
-        box.remove(child)
-        child = nxt
-
-
 def set_config(**values):
     cfg = vm.load_config()
     for k, v in values.items():
@@ -79,7 +73,7 @@ def set_config(**values):
 
 class Wizard(Gtk.Window):
     def __init__(self, parent, on_done=None):
-        super().__init__(title="Configuration de Vasistas", transient_for=parent, modal=True,
+        super().__init__(title=_("Configuration de Vasistas"), transient_for=parent, modal=True,
                          default_width=700, default_height=640, icon_name=APP_ID)
         self.on_done = on_done
         self.cancel = threading.Event()
@@ -96,9 +90,9 @@ class Wizard(Gtk.Window):
             self.stack.add_named(widget, name)
             self.pages.append(name)
 
-        self.back = Gtk.Button(label="Précédent")
+        self.back = Gtk.Button(label=_("Précédent"))
         self.back.connect("clicked", lambda *_: self.go(-1))
-        self.next = Gtk.Button(label="Suivant")
+        self.next = Gtk.Button(label=_("Suivant"))
         self.next.add_css_class(Granite.STYLE_CLASS_SUGGESTED_ACTION)
         self.next.connect("clicked", lambda *_: self.go(1))
         self.dots = Gtk.Label()
@@ -138,7 +132,7 @@ class Wizard(Gtk.Window):
     def update_nav(self):
         name = self.pages[self.index]
         self.back.set_visible(self.index > 0)
-        self.next.set_label("Terminer" if self.index == len(self.pages) - 1 else "Suivant")
+        self.next.set_label(_("Terminer") if self.index == len(self.pages) - 1 else _("Suivant"))
         self.dots.set_label(" ".join("●" if i == self.index else "○" for i in range(len(self.pages))))
         self.next.set_sensitive(True)
         refresh = getattr(self, f"refresh_{name}", None)
@@ -167,11 +161,12 @@ class Wizard(Gtk.Window):
     # -- 1. bienvenue et vérifications --
 
     def page_welcome(self):
-        box = self.page("Bienvenue dans Vasistas",
-                        "Les applications Windows, une fenêtre chacune, sur votre bureau Linux. Cet assistant "
-                        "vérifie l'ordinateur, installe Windows puis les applications.")
+        box = self.page(_("Bienvenue dans Vasistas"),
+                        _("Vasistas affiche chaque application Windows dans sa propre fenêtre sur votre bureau Linux. "
+                          "Cet assistant vérifie la configuration de l'ordinateur, installe Windows, puis installe les "
+                          "applications."))
         self.checks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Granite.HeaderLabel.new("Cet ordinateur"))
+        box.append(Granite.HeaderLabel.new(_("Cet ordinateur")))
         box.append(self.checks)
         return "welcome", self.scrolled(box)
 
@@ -180,70 +175,72 @@ class Wizard(Gtk.Window):
         kvm = os.access("/dev/kvm", os.R_OK | os.W_OK)
         qemu = bool(shutil.which(vm.QEMU)) or Path(vm.QEMU).exists()
         ovmf = vm.OVMF_CODE.exists() and vm.OVMF_VARS.exists()
-        vm.DATA.mkdir(parents=True, exist_ok=True)
+        vm.ensure_data()
         free = shutil.disk_usage(vm.DATA).free / 1e9
         ram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
         installed = vm.DISK.exists()
         items = [
-            (kvm, "Virtualisation matérielle (KVM)",
-             "Activez la virtualisation (SVM ou VT-x) dans le BIOS, puis : sudo usermod -aG kvm $USER, "
-             "et rouvrez la session."),
+            (kvm, _("Virtualisation matérielle (KVM)"),
+             _("Activez la virtualisation (SVM ou VT-x) dans le BIOS, exécutez la commande sudo usermod -aG kvm $USER, "
+               "puis fermez et rouvrez la session.")),
             (qemu, "QEMU", "sudo apt install qemu-system-x86 qemu-utils"),
-            (ovmf, "Micrologiciel UEFI (OVMF)", "sudo apt install ovmf"),
-            (bool(vm.VIRTIOFSD), "Partage de dossiers (virtiofsd)", "sudo apt install virtiofsd"),
-            (installed or free >= MIN_FREE_GB, f"Espace disque : {free:.0f} Go libres",
-             f"Windows et ses applications demandent environ {MIN_FREE_GB} Go."),
-            (ram >= 15, f"Mémoire : {ram:.0f} Go", "16 Go conseillés : Windows en prend 6 à 12."),
+            (ovmf, _("Micrologiciel UEFI (OVMF)"), "sudo apt install ovmf"),
+            (bool(vm.VIRTIOFSD), _("Partage de dossiers (virtiofsd)"), "sudo apt install virtiofsd"),
+            (installed or free >= MIN_FREE_GB, _("Espace disque : {free} Go libres", free=f"{free:.0f}"),
+             _("Windows et ses applications nécessitent environ {n} Go d'espace disque.", n=MIN_FREE_GB)),
+            (ram >= 15, _("Mémoire : {n} Go", n=f"{ram:.0f}"), _("16 Go de mémoire sont conseillés : Windows utilise "
+                                                                 "de 6 à 12 Go.")),
         ]
         for ok, title, hint in items:
             self.checks.append(check_line(ok, title, hint))
         if installed:
-            self.checks.append(check_line(True, "Windows est déjà installé"))
+            self.checks.append(check_line(True, _("Windows est déjà installé")))
         self.next.set_sensitive(kvm and qemu and ovmf)
 
     # -- 2. Windows : version, langue, licence, ISO, pilotes --
 
     def page_windows(self):
-        box = self.page("Windows", "Choisissez la version et la langue de Windows, puis sa licence. L'image "
-                        "d'installation se télécharge ici, chez Microsoft.", "computer")
+        box = self.page("Windows", _("Choisissez la version et la langue de Windows, puis le mode de licence. Vasistas "
+                                     "télécharge l'image d'installation directement depuis les serveurs de "
+                                     "Microsoft."), "computer")
         cfg = vm.load_config()
         self.versions = winiso.VERSIONS
         keys = [v["key"] for v in self.versions]
-        box.append(Granite.HeaderLabel.new("Version"))
-        self.version = Gtk.DropDown.new_from_strings([v["label"] for v in self.versions])
+        box.append(Granite.HeaderLabel.new(_("Version")))
+        self.version = Gtk.DropDown.new_from_strings([_(v["label"]) for v in self.versions])
         cur = cfg.get("windows_version", winiso.DEFAULT_VERSION)
         self.version.set_selected(keys.index(cur) if cur in keys else 0)
         box.append(self.version)
         self.version_note = dim("")
         box.append(self.version_note)
 
-        box.append(Granite.HeaderLabel.new("Langue"))
+        box.append(Granite.HeaderLabel.new(_("Langue")))
         self.language = Gtk.DropDown()
         self.language.set_enable_search(True)
         box.append(self.language)
-        box.append(dim("Langue des menus de Windows. Le format des dates, le clavier et le fuseau horaire "
-                       "sont repris de ce système."))
+        box.append(dim(_("Langue de l'interface de Windows. Le format des dates, la disposition du clavier et le "
+                         "fuseau horaire sont repris de la configuration de Linux.")))
 
         self.license_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.license_box.append(Granite.HeaderLabel.new("Licence"))
-        self.with_key = Gtk.CheckButton(label="J'ai une clé de produit")
+        self.license_box.append(Granite.HeaderLabel.new(_("Licence")))
+        self.with_key = Gtk.CheckButton(label=_("J'ai une clé de produit"))
         self.key_entry = Gtk.Entry(placeholder_text="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", margin_start=28,
                                    max_length=40)
-        self.without_key = Gtk.CheckButton(label="Installer sans clé et activer plus tard", group=self.with_key)
+        self.without_key = Gtk.CheckButton(label=_("Installer sans clé et activer plus tard"), group=self.with_key)
         editions = [e for e in winiso.EDITIONS if e[0] in winiso.CONSUMER_EDITIONS]
         self.editions = [e[0] for e in editions]
-        self.edition = Gtk.DropDown.new_from_strings([e[1] for e in editions])
+        self.edition = Gtk.DropDown.new_from_strings([_(e[1]) for e in editions])
         ed = cfg.get("windows_edition", "pro")
         self.edition.set_selected(self.editions.index(ed) if ed in self.editions else 0)
         ed_row = Gtk.Box(spacing=8, margin_start=28)
-        ed_row.append(Gtk.Label(label="Édition :"))
+        ed_row.append(Gtk.Label(label=_("Édition :")))
         ed_row.append(self.edition)
         for w in (self.with_key, self.key_entry, self.without_key, ed_row):
             self.license_box.append(w)
-        self.license_box.append(dim("Sans clé, Windows s'installe dans l'édition choisie et fonctionne avec un "
-                                    "rappel d'activation, jusqu'à ce que vous saisissiez votre clé "
-                                    "(Paramètres, Système, Activation)."))
-        self.buy = Gtk.LinkButton(label="Acheter une licence Windows 11 Professionnel", uri=winiso.buy_url(),
+        self.license_box.append(dim(_("Sans clé, Windows s'installe dans l'édition choisie et fonctionne avec un "
+                                      "rappel d'activation, jusqu'à ce que vous saisissiez votre clé "
+                                      "(Paramètres, Système, Activation).")))
+        self.buy = Gtk.LinkButton(label=_("Acheter une licence Windows 11 Professionnel"), uri=winiso.buy_url(),
                                   halign=Gtk.Align.START)
         self.license_box.append(self.buy)
         box.append(self.license_box)
@@ -253,18 +250,18 @@ class Wizard(Gtk.Window):
         else:
             self.without_key.set_active(True)
 
-        box.append(Granite.HeaderLabel.new("Image d'installation"))
+        box.append(Granite.HeaderLabel.new(_("Image d'installation")))
         self.iso_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.append(self.iso_box)
         btns = Gtk.Box(spacing=8)
-        self.dl_btn = Gtk.Button(label="Télécharger")
+        self.dl_btn = Gtk.Button(label=_("Télécharger"))
         self.dl_btn.add_css_class(Granite.STYLE_CLASS_SUGGESTED_ACTION)
         self.dl_btn.connect("clicked", lambda *_: self.download_iso())
-        pick = Gtk.Button(label="Choisir un fichier ISO…")
+        pick = Gtk.Button(label=_("Choisir un fichier ISO…"))
         pick.connect("clicked", lambda *_: self.pick_iso())
-        page = Gtk.Button(label="Page de Microsoft")
+        page = Gtk.Button(label=_("Ouvrir la page de Microsoft"))
         page.connect("clicked", lambda *_: Gtk.UriLauncher.new(self.official_page()).launch(self, None, None))
-        self.stop_btn = Gtk.Button(label="Annuler", visible=False)
+        self.stop_btn = Gtk.Button(label=_("Annuler"), visible=False)
         self.stop_btn.connect("clicked", lambda *_: self.cancel.set())
         for b in (self.dl_btn, pick, page, self.stop_btn):
             btns.append(b)
@@ -272,7 +269,7 @@ class Wizard(Gtk.Window):
         self.progress = Gtk.ProgressBar(visible=False, show_text=True, margin_top=6)
         box.append(self.progress)
 
-        box.append(Granite.HeaderLabel.new("Pilotes"))
+        box.append(Granite.HeaderLabel.new(_("Pilotes")))
         self.virtio_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.append(self.virtio_box)
 
@@ -294,12 +291,12 @@ class Wizard(Gtk.Window):
 
     def on_version(self, initial=False):
         v = self.current_version()
-        note = v.get("description", "")
+        note = _(v["description"]) if v.get("description") else ""
         if v.get("note"):
-            note += " " + v["note"]
+            note += " " + _(v["note"])
         self.version_note.set_label(note)
         self.langs = winiso.languages(v["key"])
-        names = [n for _, n in self.langs]
+        names = [_(n) for _c, n in self.langs]
         self.language.set_model(Gtk.StringList.new(names))
         wanted = vm.load_config().get("windows_language") if initial else None
         codes = [c for c, _ in self.langs]
@@ -331,26 +328,29 @@ class Wizard(Gtk.Window):
         info = cfg.get("windows_iso") or {}
         iso = vm.WIN_ISO.exists()
         if installed and not iso:
-            self.iso_box.append(check_line(True, "Inutile : Windows est déjà installé"))
+            self.iso_box.append(check_line(True, _("Image d'installation inutile : Windows est déjà installé")))
         elif iso:
             name = info.get("name") or os.path.basename(os.path.realpath(vm.WIN_ISO))
             same = info.get("version") == cfg.get("windows_version") and \
                 info.get("language") == cfg.get("windows_language")
             hint = "" if same or info.get("picked") else \
-                "Cette image ne correspond pas aux choix ci-dessus : téléchargez-la de nouveau."
+                _("Cette image d'installation ne correspond pas à la version et à la langue choisies : téléchargez une "
+                  "nouvelle image.")
             if info.get("picked"):
-                hint = "Image choisie à la main : vérifiez qu'elle correspond à la version et à la langue."
-            self.iso_box.append(check_line(same, f"Image prête : {name}", hint))
+                hint = _("Image choisie manuellement : vérifiez qu'elle correspond à la version et à la langue "
+                         "choisies.")
+            self.iso_box.append(check_line(same, _("Image d'installation prête : {name}", name=name), hint))
         else:
-            self.iso_box.append(check_line(False, "Image à télécharger (5 à 8 Go)",
-                                           "Téléchargée directement chez Microsoft. Comptez 5 à 20 minutes."))
+            self.iso_box.append(check_line(False, _("Image d'installation à télécharger (5 à 8 Go)"),
+                                           _("Téléchargement direct depuis les serveurs de Microsoft, en 5 à 20 "
+                                             "minutes environ.")))
         self.dl_btn.set_sensitive(not self.downloading and not installed)
         clear(self.virtio_box)
         virtio = vm.VIRTIO_ISO.exists()
-        self.virtio_box.append(check_line(virtio, "Pilotes virtio pour Windows",
-                                          "Environ 700 Mo, publiés par le projet Fedora."))
+        self.virtio_box.append(check_line(virtio, _("Pilotes virtio pour Windows"),
+                                          _("Environ 700 Mo, publiés par le projet Fedora.")))
         if not virtio:
-            get = Gtk.Button(label="Télécharger les pilotes", halign=Gtk.Align.START)
+            get = Gtk.Button(label=_("Télécharger les pilotes"), halign=Gtk.Align.START)
             get.connect("clicked", lambda *_: self.download_virtio())
             self.virtio_box.append(get)
         v = self.current_version()
@@ -360,8 +360,8 @@ class Wizard(Gtk.Window):
             self.next.set_sensitive((iso or installed) and virtio and key_ok and not self.downloading)
 
     def pick_iso(self):
-        dialog = Gtk.FileDialog(title="Image ISO de Windows")
-        filt = Gtk.FileFilter(name="Images ISO")
+        dialog = Gtk.FileDialog(title=_("Image ISO de Windows"))
+        filt = Gtk.FileFilter(name=_("Images ISO"))
         filt.add_pattern("*.iso")
         store = Gio.ListStore.new(Gtk.FileFilter)
         store.append(filt)
@@ -386,14 +386,14 @@ class Wizard(Gtk.Window):
         self.cancel.clear()
         self.progress.set_visible(True)
         self.progress.set_fraction(0)
-        self.progress.set_text("Demande du lien à Microsoft…")
+        self.progress.set_text(_("Demande du lien de téléchargement à Microsoft…"))
         self.stop_btn.set_visible(True)
         self.refresh_windows()
 
         def progress(done, total):
             if total:
                 GLib.idle_add(self.progress.set_fraction, done / total)
-                GLib.idle_add(self.progress.set_text, f"{done / 1e9:.1f} / {total / 1e9:.1f} Go")
+                GLib.idle_add(self.progress.set_text, _("{done} / {total} Go", done=f"{done / 1e9:.1f}", total=f"{total / 1e9:.1f}"))
 
         def work():
             msg = None
@@ -401,14 +401,16 @@ class Wizard(Gtk.Window):
                 url, name, size = winiso.get_link(lang, v["key"])
                 free = shutil.disk_usage(vm.DATA).free
                 if size and free < size + 2e9:
-                    raise winiso.DownloadError(f"Pas assez de place : {size / 1e9:.1f} Go nécessaires.")
+                    raise winiso.DownloadError(_("Espace disque insuffisant : {size} Go nécessaires.",
+                                                 size=f"{size / 1e9:.1f}"))
                 if vm.WIN_ISO.is_symlink():
                     vm.WIN_ISO.unlink()
                 winiso.download(url, vm.WIN_ISO, progress, self.cancel, expected_size=size)
                 set_config(windows_iso={"version": v["key"], "language": lang, "name": name})
-                msg = f"{name} téléchargé."
+                msg = _("{name} téléchargé.", name=name)
             except winiso.DownloadCancelled:
-                msg = "Téléchargement interrompu : il reprendra où il s'est arrêté."
+                msg = _("Téléchargement interrompu. Un nouveau clic sur « Télécharger » reprend le téléchargement là "
+                        "où il s'est arrêté.")
             except (winiso.DownloadError, OSError) as e:
                 msg = str(e)
             GLib.idle_add(self.download_done, msg)
@@ -437,10 +439,10 @@ class Wizard(Gtk.Window):
                         done += len(chunk)
                         if total:
                             GLib.idle_add(self.progress.set_fraction, done / total)
-                            GLib.idle_add(self.progress.set_text, f"Pilotes : {done >> 20} / {total >> 20} Mo")
+                            GLib.idle_add(self.progress.set_text, _("Pilotes : {done} / {total} Mo", done=done >> 20, total=total >> 20))
                 tmp.replace(vm.VIRTIO_ISO)
             except OSError as e:
-                GLib.idle_add(self.progress.set_text, f"Échec : {e}")
+                GLib.idle_add(self.progress.set_text, _("Échec : {error}", error=e))
                 tmp.unlink(missing_ok=True)
                 return
             GLib.idle_add(self.progress.set_visible, False)
@@ -451,25 +453,26 @@ class Wizard(Gtk.Window):
 
     def page_settings(self):
         from .companion_common import RESOURCES
-        box = self.page("Réglages", "Modifiables ensuite dans Vasistas.", "preferences-system")
-        box.append(Granite.HeaderLabel.new("Puissance allouée à Windows"))
+        box = self.page(_("Réglages"), _("Ces réglages restent modifiables ensuite dans Vasistas."),
+                        "preferences-system")
+        box.append(Granite.HeaderLabel.new(_("Puissance allouée à Windows")))
         keys = [k for k, _, _ in RESOURCES]
-        drop = Gtk.DropDown.new_from_strings([f"{label} · {hint}" for _, label, hint in RESOURCES])
+        drop = Gtk.DropDown.new_from_strings([f"{_(label)} · {_(hint)}" for _k, label, hint in RESOURCES])
         cur = vm.load_config().get("resources", "balanced")
         drop.set_selected(keys.index(cur) if cur in keys else 1)
         drop.connect("notify::selected", lambda d, _p: set_config(resources=keys[d.get_selected()]))
         box.append(drop)
 
-        box.append(Granite.HeaderLabel.new("Dossiers visibles dans Windows"))
-        box.append(dim("Chaque dossier devient un lecteur dans l'Explorateur de Windows. Enregistrez-y vos "
-                       "documents pour les retrouver sous Linux."))
+        box.append(Granite.HeaderLabel.new(_("Dossiers visibles dans Windows")))
+        box.append(dim(_("Chaque dossier coché apparaît comme un lecteur dans l'Explorateur de Windows. Les documents "
+                         "enregistrés dans ces lecteurs sont accessibles depuis Linux.")))
         current = {str(p) for _, p, _, _ in vm.shares()}
         self.share_checks = []
         for special, label in SPECIAL:
             path = GLib.get_user_special_dir(special)
             if not path or not os.path.isdir(path) or path == os.path.expanduser("~"):
                 continue
-            chk = Gtk.CheckButton(label=f"{label}  ({path.replace(os.path.expanduser('~'), '~', 1)})",
+            chk = Gtk.CheckButton(label=f"{_(label)}  ({path.replace(os.path.expanduser('~'), '~', 1)})",
                                   active=path in current)
             chk.connect("toggled", lambda *_: self.save_share_checks())
             self.share_checks.append((chk, path, label))
@@ -492,31 +495,32 @@ class Wizard(Gtk.Window):
     # -- 4. installation de Windows --
 
     def page_install(self):
-        box = self.page("Installation de Windows", "", "system-software-install")
+        box = self.page(_("Installation de Windows"), "", "system-software-install")
         self.install_page = box
         self.install_label = Gtk.Label(xalign=0, wrap=True)
         box.append(self.install_label)
-        self.install_btn = Gtk.Button(label="Installer Windows", halign=Gtk.Align.START)
+        self.install_btn = Gtk.Button(label=_("Installer Windows"), halign=Gtk.Align.START)
         self.install_btn.add_css_class(Granite.STYLE_CLASS_SUGGESTED_ACTION)
         self.install_btn.connect("clicked", lambda *_: self.install_windows())
         box.append(self.install_btn)
         self.install_spin = Gtk.Spinner(halign=Gtk.Align.START)
         box.append(self.install_spin)
-        box.append(dim("Une fenêtre montre l'installation ; elle se ferme d'elle-même à la fin, après deux "
-                       "redémarrages de Windows. Il n'y a rien à faire pendant ce temps."))
+        box.append(dim(_("Une fenêtre affiche la progression de l'installation et se ferme automatiquement à la fin, "
+                         "après deux redémarrages de Windows. Aucune action n'est nécessaire pendant l'installation.")))
         return "install", self.scrolled(box)
 
     def refresh_install(self):
         cfg = vm.load_config()
         v = next((x for x in winiso.VERSIONS if x["key"] == cfg.get("windows_version")), winiso.VERSIONS[0])
-        lang = dict(winiso.LANGUAGES).get(cfg.get("windows_language"), cfg.get("windows_language") or "")
-        self.install_page.subtitle.set_label(f"{v['label']}, {lang.lower()}, avec un compte local (sans compte "
-                                             "Microsoft).")
+        lang = dict(winiso.LANGUAGES).get(cfg.get("windows_language"))
+        lang = _(lang) if lang else cfg.get("windows_language") or ""
+        self.install_page.subtitle.set_label(_("{version}, {language}, avec un compte local (sans compte "
+                                               "Microsoft).", version=_(v["label"]), language=lang.lower()))
         installed = vm.DISK.exists()
         running = getattr(self, "installing", False)
-        self.install_label.set_label("Windows est installé." if installed and not running else
-                                     "Installation en cours : 20 à 40 minutes." if running else
-                                     "Prêt à installer Windows.")
+        self.install_label.set_label(_("Windows est installé.") if installed and not running else
+                                     _("Installation en cours (20 à 40 minutes environ).") if running else
+                                     _("Prêt à installer Windows."))
         self.install_btn.set_visible(not installed and not running)
         self.next.set_sensitive(installed and not running)
 
@@ -538,51 +542,55 @@ class Wizard(Gtk.Window):
         self.install_spin.stop()
         self.refresh_install()
         if rc != 0 or not vm.DISK.exists():
-            self.install_label.set_label(f"L'installation a échoué (code {rc}). Détails : {vm.DATA / 'install.log'}")
+            self.install_label.set_label(_("L'installation a échoué (code {code}). Détails dans le journal : {log}",
+                                           code=rc, log=vm.DATA / "install.log"))
         return False
 
     # -- 5. préparation de Windows et applications --
 
     def page_apps(self):
         from . import catalog
-        box = self.page("Applications", "Installées dans Windows, depuis les serveurs de leurs éditeurs.",
+        box = self.page(_("Applications"), _("Les applications sont installées dans Windows depuis les serveurs de "
+                                             "leurs éditeurs."),
                         "applications-office")
-        self.prepare = Gtk.CheckButton(label="Outils de Vasistas dans Windows (dossiers partagés, pilotes)",
+        self.prepare = Gtk.CheckButton(label=_("Installer les outils de Vasistas dans Windows (dossiers partagés, "
+                                               "pilotes)"),
                                        active=True)
         box.append(self.prepare)
         box.append(Granite.HeaderLabel.new("Microsoft Office"))
-        self.office = Gtk.CheckButton(label="Installer Office", active=True)
+        self.office = Gtk.CheckButton(label=_("Installer Office"), active=True)
         box.append(self.office)
         self.office_products = catalog.OFFICE_PRODUCTS
-        self.office_product = Gtk.DropDown.new_from_strings([p["label"] for p in self.office_products])
+        self.office_product = Gtk.DropDown.new_from_strings([_(p["label"]) for p in self.office_products])
         self.office_product.set_margin_start(28)
         self.office_product.set_halign(Gtk.Align.START)
         box.append(self.office_product)
-        box.append(dim("Choisissez l'offre de votre abonnement ou de votre licence. Office s'installe dans la "
-                       "langue de Windows et s'active à la première ouverture. La page Installer de Vasistas "
-                       "propose ensuite d'autres versions, langues et compléments (Visio, Project)."))
-        box.append(Granite.HeaderLabel.new("Autres applications"))
+        box.append(dim(_("Choisissez l'offre de votre abonnement ou de votre licence. Office s'installe dans la "
+                         "langue de Windows et s'active à la première ouverture. La page Installer de Vasistas "
+                         "propose ensuite d'autres versions, langues et compléments (Visio, Project).")))
+        box.append(Granite.HeaderLabel.new(_("Autres applications")))
         flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
                            column_spacing=12, row_spacing=4, homogeneous=True)
         self.app_checks = {}
         for a in catalog.APPS:
-            chk = Gtk.CheckButton(label=a["label"])
-            chk.set_tooltip_text(a.get("description", ""))
+            chk = Gtk.CheckButton(label=_(a["label"]))
+            chk.set_tooltip_text(_(a["description"]) if a.get("description") else "")
             self.app_checks[a["key"]] = chk
             flow.append(chk)
         box.append(flow)
-        self.apps_btn = Gtk.Button(label="Installer", halign=Gtk.Align.START, margin_top=8)
+        self.apps_btn = Gtk.Button(label=_("Installer"), halign=Gtk.Align.START, margin_top=8)
         self.apps_btn.add_css_class(Granite.STYLE_CLASS_SUGGESTED_ACTION)
         self.apps_btn.connect("clicked", lambda *_: self.install_apps())
         box.append(self.apps_btn)
-        self.apps_label = dim("Vous pouvez aussi passer cette étape et installer plus tard depuis Vasistas.")
+        self.apps_label = dim(_("Vous pouvez aussi passer cette étape et installer les applications plus tard depuis "
+                                "Vasistas."))
         box.append(self.apps_label)
         # déjà présentes d'après la dernière liste lue dans Windows
         from . import guestapps
         have = {a["id"] for a in guestapps.cached()}
         if "winword" in have:
             self.office.set_active(False)
-            self.office.set_label("Installer Office (déjà installé)")
+            self.office.set_label(_("Installer Office (déjà installé)"))
         return "apps", self.scrolled(box)
 
     def install_apps(self):
@@ -602,37 +610,37 @@ class Wizard(Gtk.Window):
 
         def work():
             try:
-                say("Démarrage de Windows…")
+                say(_("Démarrage de Windows…"))
                 if host_ready() is None:
                     spawn("run")
                 vm.start()
-                for _ in range(300):
+                for _i in range(300):
                     st = host_ready()
                     if st and st.get("guest_ready"):
                         break
                     time.sleep(1)
                 else:
-                    raise RuntimeError("Windows ne répond pas")
+                    raise RuntimeError(_("Windows ne répond pas"))
                 if prepare:
-                    say("Préparation de Windows (outils de Vasistas)…")
+                    say(_("Préparation de Windows (outils de Vasistas)…"))
                     script = (vm.INSTALL_DIR / "configure-windows.ps1").read_text(encoding="utf-8-sig")
                     res = control.request({"exec": script}, timeout=1800)
                     if res.get("code"):
-                        raise RuntimeError("préparation : " + (res.get("out") or "")[-300:])
+                        raise RuntimeError(_("préparation de Windows : {error}", error=(res.get("out") or "")[-300:]))
                 if product:
-                    say("Installation d'Office… (10 à 30 minutes)")
+                    say(_("Installation d'Office… (10 à 30 minutes)"))
                     r = catalog.install_office(product)
                     if not r.get("ok", r.get("code") == 0):
-                        raise RuntimeError(f"Office : code {r.get('code')}")
+                        raise RuntimeError(_("installation d'Office : code {code}", code=r.get("code")))
                 if keys:
-                    say("Installation des autres applications…")
+                    say(_("Installation des autres applications…"))
                     res = catalog.install_apps(keys, language=regional.windows_locale())
-                    failed = [catalog.APPS_BY_KEY[k]["label"] for k, r in res.items() if not r.get("ok")]
+                    failed = [_(catalog.APPS_BY_KEY[k]["label"]) for k, r in res.items() if not r.get("ok")]
                     if failed:
-                        raise RuntimeError("non installées : " + ", ".join(failed))
-                say("Tout est installé.")
+                        raise RuntimeError(_("applications non installées : {apps}", apps=", ".join(failed)))
+                say(_("Toutes les applications sélectionnées sont installées."))
             except (OSError, RuntimeError, SystemExit, ValueError) as e:
-                say(f"Échec : {e}")
+                say(_("Échec : {error}", error=e))
             GLib.idle_add(self.apps_btn.set_sensitive, True)
             GLib.idle_add(self.next.set_sensitive, True)
         threading.Thread(target=work, daemon=True).start()
@@ -640,15 +648,31 @@ class Wizard(Gtk.Window):
     # -- 6. fin --
 
     def page_done(self):
-        box = self.page("C'est prêt", "Vos applications Windows sont dans le menu Applications.")
-        box.append(dim("Dans Vasistas : la page Menu Applications choisit les applications affichées, la page "
-                       "Fichiers les types de documents ouverts dans Windows, la page Dossiers ce que Windows "
-                       "voit de vos dossiers, et la page Installer ajoute des applications."))
-        guide = Gtk.Button(label="Ouvrir le guide rapide", halign=Gtk.Align.START, margin_top=12)
+        box = self.page(_("Configuration terminée"), _("Vos applications Windows sont dans le menu Applications."))
+        box.append(dim(_("Dans Vasistas, la page Applications permet de choisir les applications affichées dans le "
+                         "menu et d'en installer d'autres. La page Fichiers définit les dossiers Linux visibles dans "
+                         "Windows et les types de documents ouverts avec Windows. La page Affichage règle "
+                         "l'équilibre entre autonomie de la batterie et fluidité.")))
+        box.append(dim(_("Vous découvrez Vasistas ? La visite guidée présente les fonctions principales en quatre "
+                         "écrans.")))
+        buttons = Gtk.Box(spacing=6, margin_top=12)
+        tour = Gtk.Button(label=_("Commencer la visite guidée"))
+        tour.add_css_class(Granite.STYLE_CLASS_SUGGESTED_ACTION)
+        tour.connect("clicked", lambda *_a: self.open_tour())
+        guide = Gtk.Button(label=_("Ouvrir le guide rapide"))
         guide.connect("clicked", lambda *_: self.open_guide())
-        box.append(guide)
+        buttons.append(tour)
+        buttons.append(guide)
+        box.append(buttons)
         return "done", self.scrolled(box)
 
     def open_guide(self):
         from .guide import GuideWindow
         GuideWindow(self.get_transient_for() or self).present()
+
+    def open_tour(self):
+        """Visite guidée : l'assistant se ferme (comme « Terminer »), la visite prend la suite."""
+        from .companion_tour import TourWindow
+        parent = self.get_transient_for()
+        self.go(len(self.pages))
+        TourWindow(parent).present()

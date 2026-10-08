@@ -22,6 +22,7 @@ import urllib.request
 from pathlib import Path
 
 from . import version
+from .i18n import _
 from .vm import DATA
 
 APP_ROOT = Path.home() / ".local/opt/vasistas"
@@ -61,10 +62,10 @@ def latest(include_prerelease=version.PRERELEASE):
             releases = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            raise UpdateError("Dépôt introuvable ou privé : pas de version publiée à consulter.")
-        raise UpdateError(f"GitHub répond {e.code}.")
+            raise UpdateError(_("Dépôt introuvable ou privé : aucune version publiée n'est disponible."))
+        raise UpdateError(_("GitHub a répondu avec le code {code}.", code=e.code))
     except (OSError, ValueError) as e:
-        raise UpdateError(f"GitHub injoignable : {e}")
+        raise UpdateError(_("GitHub injoignable : {error}", error=e))
     for rel in releases:
         if rel.get("draft") or (rel.get("prerelease") and not include_prerelease):
             continue
@@ -108,7 +109,7 @@ def _download(url, dest, progress=None, cancel=None):
         done = 0
         while chunk := r.read(1 << 18):
             if cancel is not None and cancel.is_set():
-                raise UpdateError("Mise à jour annulée.")
+                raise UpdateError(_("Mise à jour annulée."))
             f.write(chunk)
             done += len(chunk)
             if progress:
@@ -117,7 +118,7 @@ def _download(url, dest, progress=None, cancel=None):
 
 def _verify(archive, sums_url):
     if not sums_url:
-        raise UpdateError("Version publiée sans fichier SHA256SUMS : installation refusée.")
+        raise UpdateError(_("Version publiée sans fichier SHA256SUMS : installation refusée."))
     with _get(sums_url, accept="text/plain") as r:
         sums = r.read().decode()
     expected = next((line.split()[0] for line in sums.splitlines()
@@ -127,15 +128,15 @@ def _verify(archive, sums_url):
         for block in iter(lambda: f.read(1 << 20), b""):
             h.update(block)
     if expected is None or h.hexdigest() != expected.lower():
-        raise UpdateError("Empreinte de l'archive incorrecte : téléchargement corrompu ou modifié.")
+        raise UpdateError(_("Empreinte de l'archive incorrecte : téléchargement corrompu ou modifié."))
 
 
 def install(release, progress=None, cancel=None):
     """Télécharge, vérifie et installe `release` (voir latest()). Rend le dossier installé."""
     if mode() == "dev":
-        raise UpdateError("Version de développement (dépôt git) : mettre à jour avec git pull.")
+        raise UpdateError(_("Version de développement (dépôt git) : mettre à jour avec git pull."))
     if not release or not release.get("asset"):
-        raise UpdateError("Cette version publiée n'a pas d'archive d'installation.")
+        raise UpdateError(_("Cette version publiée n'a pas d'archive d'installation."))
     work = DATA / "updates"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -148,7 +149,7 @@ def install(release, progress=None, cancel=None):
         tar.extractall(staging, filter="data")
     roots = [p for p in staging.iterdir() if p.is_dir()]
     if len(roots) != 1 or not (roots[0] / "install.sh").exists():
-        raise UpdateError("Archive inattendue : install.sh introuvable.")
+        raise UpdateError(_("Archive inattendue : install.sh introuvable."))
     shutil.rmtree(target, ignore_errors=True)
     APP_ROOT.mkdir(parents=True, exist_ok=True)
     shutil.move(str(roots[0]), target)
@@ -156,5 +157,5 @@ def install(release, progress=None, cancel=None):
                          timeout=600, env=dict(os.environ, VASISTAS_FROM=version.VERSION))
     shutil.rmtree(work, ignore_errors=True)
     if res.returncode != 0:
-        raise UpdateError("install.sh a échoué : " + (res.stderr or res.stdout)[-400:])
+        raise UpdateError(_("install.sh a échoué : {error}", error=(res.stderr or res.stdout)[-400:]))
     return target

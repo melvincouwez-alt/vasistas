@@ -58,7 +58,8 @@ $share = Get-PSDrive -PSProvider FileSystem |
 if ($share) {
     $src = Join-Path $share.Root 'Agent'
     if (Test-Path $src) {
-        robocopy $src (Join-Path $dir 'Agent') /MIR /NJH /NJS /NP | Out-Null
+        # /XO : un agent mis à jour à chaud (update_agent.py) plus récent que le CD reste en place
+        robocopy $src (Join-Path $dir 'Agent') /MIR /NJH /NJS /NP /XO | Out-Null
         # copiés depuis un CD : lecture seule, ce qui bloquerait une mise à jour à chaud
         attrib -r (Join-Path $dir 'Agent\*') | Out-Null
     }

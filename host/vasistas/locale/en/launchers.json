@@ -1,0 +1,13 @@
+{
+  "Applications": "Applications",
+  "Lanceurs": "Launchers",
+  "Préciser « (Windows) » dans le nom": "Add “(Windows)” to the name",
+  "« Word (Windows) » au lieu de « Word » dans le menu Applications et le dock, pour les distinguer des applications Linux du même nom.": "“Word (Windows)” instead of “Word” in the Applications menu and the dock, to tell them apart from Linux applications with the same name.",
+  "Emblème Vasistas sur les icônes": "Vasistas emblem on icons",
+  "Vasistas ajoute son logo en bas à droite des icônes des applications Windows.": "Vasistas adds its logo to the bottom right corner of Windows application icons.",
+  "Lanceurs mis à jour": "Launchers updated",
+  "{name} (Windows)": "{name} (Windows)",
+  "Application Windows (Vasistas)": "Windows app (Vasistas)",
+  "Les applications de la machine virtuelle Windows, chacune dans sa propre fenêtre": "Applications from the Windows virtual machine, each in its own window",
+  "Démarrer Windows et choisir les applications du menu": "Start Windows and choose the apps in the menu"
+}

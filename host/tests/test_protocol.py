@@ -26,6 +26,13 @@ def test_tuile_compressee():
     assert protocol.unpack_tile(payload) == (9, 3, 4, 16, 16, px)
 
 
+def test_tuile_zstd():
+    px = bytes(range(256)) * 4
+    payload = protocol.TILE_HEADER.pack(9, 3, 4, 16, 16, protocol.ENC_ZSTD) + protocol.zstd.compress(px, 1)
+    assert protocol.unpack_tile(payload) == (9, 3, 4, 16, 16, px)
+    assert protocol.hello(scale=1.0)["zstd"] is True
+
+
 def test_recalage_apres_dechets():
     msg = {"t": "hello"}
     data = b"\x00VSxx\xff\xff" + b"garbage" + protocol.pack_json(msg)

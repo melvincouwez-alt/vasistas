@@ -56,8 +56,62 @@
 - **Veille** (`sleep.py`) : la VM est suspendue (QMP stop) sans usage ; l'heure de Windows
   est remise à jour au réveil. **Mémoire** (`balloon.py`) : ballon virtio piloté d'après
   l'usage réel de Windows.
+- **Indicateur du panneau** (`indicator.py`, `vasistas indicator`) : processus à part, sans
+  GTK, StatusNotifierItem + menu com.canonical.dbusmenu écrits avec Gio.DBus. État lu par
+  `vm.pid()` et la requête `status` du socket de contrôle (qui ne réveille pas Windows) ;
+  commandes de la VM partagées avec le compagnon dans `winctl.py`. Option `indicator` de
+  config.json, lanceur de session posé par `vasistas desktop`.
+- **Puissance** (`power.py`, branché par `SleepManager`) : profil automatique (`resources_auto`) :
+  batterie ou mode Économie de power-profiles-daemon -> « battery », secteur -> profil choisi,
+  « performance » tant qu'une application de `heavy_apps` est ouverte. Cœurs et mémoire de QEMU
+  au démarrage seulement ; à chaud : plafond du ballon, affinité des fils de QEMU (cœurs les plus
+  sobres d'après ACPI CPPC sur batterie), cadence de capture de l'agent (message `capture`).
+  Arrêt automatique sans fenêtre ouverte (`auto_shutdown_min`) et démarrage en veille
+  (`vasistas boot --sleep`) dans `sleep.py`.
+- **Clavier** (`KeyboardMixin`, page « Clavier ») : Super et Alt+Tab envoyés à Windows sur demande,
+  par l'inhibition des raccourcis du compositeur (zwp_keyboard_shortcuts_inhibit_manager_v1 via
+  gdk_toplevel_inhibit_system_shortcuts). Gala demande l'autorisation une fois par fenêtre ;
+  Super+Échap rend les raccourcis au bureau. Raccourcis réservés : `reserved_shortcuts`.
+- **Lanceurs** : `launcher_suffix` (« Word (Windows) »), `launcher_emblem`, `hidden_apps`
+  (NoDisplay gardé quand les lanceurs sont réécrits) ; `desktop.apply_launcher_options()`.
+- **Imprimantes** (`printers.py`, page « Imprimantes ») : chaque file CUPS devient une imprimante IPP
+  dans Windows (`http://10.0.2.6:631/printers/<file>`). 10.0.2.6 n'existe que dans le réseau user de
+  QEMU : `guestfwd=…-cmd:printproxy.py` relaie chaque connexion vers `/run/cups/cups.sock` en
+  réécrivant l'en-tête Host (CUPS refuse un Host autre que localhost sur une connexion locale).
+  CUPS n'est pas ouvert au réseau, sa configuration n'est pas touchée.
 - **Installation** (`winiso.py`, `regional.py`, `install/autounattend.xml`) : ISO officiel
   téléchargé chez Microsoft, fichier de réponses complété avec la langue de l'ISO, le format,
   le clavier et le fuseau du système Linux, la clé de l'utilisateur ou une clé générique.
 - **Applications** (`catalog.py`) : Office par l'outil de déploiement d'Office, le reste par
   winget, lancés dans Windows par le canal de l'agent (`vasistas exec`).
+- **Points de restauration** (`restore.py`, `vasistas restore`) : instantanés internes de
+  disk.qcow2 nommés `vas-a-…` (automatiques) ou `vas-m-…` (manuels), motif et nom dans
+  restore.json. VM en marche : l'agent vide le cache disque (Write-VolumeCache), la VM est mise
+  en pause le temps de `blockdev-snapshot-internal-sync`. Retour à un point VM arrêtée seulement
+  (`qemu-img snapshot -a`). Points automatiques avant Windows Update et les installations, les
+  plus anciens supprimés au-delà de `restore_keep`. L'instantané de l'allègement n'en fait pas partie.
+- **Diagnostic** (`diagnose.py`, `vasistas diagnose [--report]`) : vérifications, réparations
+  simples, rapport anonymisé (dossier personnel, utilisateur, machine, mot de passe, fichiers
+  des dossiers partagés masqués). **Notifications à action** (`notices.py`) :
+  org.freedesktop.Notifications par Gio.DBus, repli notify-send.
+- **Écrans et place des fenêtres** (`placement.py`) : écran voulu par application (`screens` dans
+  config.json : actif, dernier, ou un connecteur), taille et écran mémorisés par configuration
+  d'écrans (`windows.json`), fenêtre jamais plus grande que 90 % de son écran. Sous Wayland
+  l'application ne place pas ses fenêtres : Gala centre les nouvelles (`center-new-windows`, avec
+  un décalage en cascade si une fenêtre occupe déjà la place) mais réimpose sinon la place de la
+  n-ième fenêtre de l'appli (WindowStateSaver), sauf pour une fenêtre non redimensionnable au
+  moment où elle apparaît : c'est le cas le temps de l'apparition. Changer d'écran = plein écran
+  sur l'écran voulu puis retour (Mutter garde la position relative dans l'espace libre, donc le
+  centrage). « Réinitialiser les affichages » (requête `reset_windows`, `vasistas reset-windows`,
+  automatique au branchement d'un écran) : `windows.reset` à l'agent, taille ramenée à 80 %,
+  fenêtre masquée puis réaffichée (Gala la recentre), puis passée sur son écran.
+- **Apparence** (`look.py`) : mode sombre, accent elementary et lissage des polices envoyés à
+  l'agent (`theme`, `fonts`), à l'arrivée de l'agent et à chaque changement du bureau, sans
+  compter comme un usage (Windows n'est pas réveillé).
+- **Notifications et zone de notification de Windows** (`winnotify.py`, `wintray.py`) : l'agent
+  lit les bannières et les icônes par UI Automation (COM, UIA3) ; chaque bannière devient une
+  notification du bureau (clic = bannière ouverte dans Windows), chaque icône un
+  StatusNotifierItem du panneau (clics renvoyés à Windows). Repli sans menu sur
+  NotifyIconSettings quand la barre des tâches n'est pas lisible.
+- **Image** : sans fenêtre visible sous Linux, rien n'est dessiné (l'image entière est refaite
+  au retour) ; sans fenêtre Windows active, 10 images par seconde au plus.

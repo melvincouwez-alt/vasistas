@@ -4,7 +4,10 @@ import concurrent.futures
 import io
 import json
 import os
+import re
 import secrets
+import select
+import signal
 import shutil
 import socket
 import string
@@ -17,8 +20,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "host" / "vendor"))
 
-import pycdlib  # noqa: E402
 import queue  # noqa: E402
+
+from .i18n import _  # noqa: E402
 
 MAIN_DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "vasistas"
 # Profil expérimental (VASISTAS_PROFILE=yttrium) : copie du disque, sockets et réglages à
@@ -91,13 +95,27 @@ def resources():
     """(cœurs, mémoire) du réglage choisi ; le profil expérimental garde ses valeurs."""
     if PROFILE:
         return CPUS, MEMORY
-    return RESOURCES.get(load_config().get("resources"), RESOURCES["balanced"])
+    # profil automatique (power.py) : batterie ou mode Économie au démarrage -> « battery »
+    from . import power
+    return RESOURCES.get(power.boot_profile(load_config()), RESOURCES["balanced"])
 SCREEN = (3440, 1800)  # couvre l'écran du portable (2880x1800) et l'externe (3440x1440)
 
 
+def ensure_data():
+    """Dossier de données réservé au compte : disque de Windows, CD d'installation, sockets QMP."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    DATA.chmod(0o700)
+
+
 def save_config(cfg: dict):
-    CONFIG.write_text(json.dumps(cfg, indent=2))
-    CONFIG.chmod(0o600)
+    # fichier lu en même temps par l'hôte, le compagnon et l'indicateur : jamais à moitié écrit,
+    # et le mot de passe de Windows jamais lisible par les autres comptes, même un instant
+    ensure_data()
+    tmp = CONFIG.with_suffix(".json.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(cfg, indent=2))
+    os.replace(tmp, CONFIG)
 
 
 def load_config() -> dict:
@@ -105,9 +123,7 @@ def load_config() -> dict:
         return json.loads(CONFIG.read_text())
     alphabet = string.ascii_letters + string.digits
     cfg = {"user": "vasistas", "password": "".join(secrets.choice(alphabet) for _ in range(20))}
-    DATA.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=2))
-    CONFIG.chmod(0o600)
+    save_config(cfg)
     return cfg
 
 
@@ -168,6 +184,7 @@ def unattend_xml():
 
 
 def build_share(install: bool):
+    import pycdlib  # chargé seulement au démarrage de la VM, pas dans chaque processus
     iso = pycdlib.PyCdlib()
     iso.new(joliet=3, vol_ident="VASISTAS")
     dirs = {"": ("/", "/")}
@@ -212,6 +229,14 @@ def sound_args() -> list:
             "-device", "ich9-intel-hda,id=hda", "-device", "hda-micro,bus=hda.0,audiodev=snd0"]
 
 
+def printers_nic_options():
+    try:
+        from . import printers
+        return printers.nic_options()
+    except Exception:  # noqa: BLE001 - jamais de VM empêchée de démarrer par les imprimantes
+        return ""
+
+
 def qemu_args(install: bool, card=None) -> list:
     cpus, memory = resources()
     args = [
@@ -235,7 +260,8 @@ def qemu_args(install: bool, card=None) -> list:
         "-device", "ide-cd,drive=virtio,bus=ide.1",
         "-drive", f"if=none,id=share,media=cdrom,readonly=on,file={SHARE}",
         "-device", "ide-cd,drive=share,bus=ide.2",
-        "-nic", "user,model=virtio-net-pci",
+        # imprimantes de Linux (printers.py) : redirection vers CUPS, sans l'exposer au réseau
+        "-nic", "user,model=virtio-net-pci" + printers_nic_options(),
         "-device", "virtio-serial-pci",
         "-chardev", f"socket,id=vas,path={SERIAL},server=on,wait=off",
         "-device", "virtserialport,chardev=vas,name=org.vasistas.0",
@@ -422,10 +448,24 @@ def _press_keys_during_boot(seconds=12):
         qmp.close()
 
 
+def _wait_exit(p, timeout):
+    """Attend la fin du processus `p` (sans sonder : pidfd), vrai s'il est terminé."""
+    try:
+        fd = os.pidfd_open(p)
+    except ProcessLookupError:
+        return True
+    try:
+        return bool(select.select([fd], [], [], timeout)[0])
+    finally:
+        os.close(fd)
+
+
 def pid():
     try:
         p = int(PIDFILE.read_text())
-        os.kill(p, 0)
+        # fichier resté après un plantage de QEMU, numéro repris par un autre processus
+        if b"qemu-system" not in Path(f"/proc/{p}/cmdline").read_bytes():
+            return None
         return p
     except (OSError, ValueError):
         return None
@@ -436,29 +476,61 @@ def _check_files(install: bool):
     if install and not WIN_ISO.exists():
         missing.append(str(WIN_ISO))
     if not install and not DISK.exists():
-        missing.append(f"{DISK} (lancer `vasistas vm install`)")
+        missing.append(_("{disk} (lancer `vasistas vm install`)", disk=DISK))
     if missing:
-        raise SystemExit("fichiers manquants :\n  " + "\n  ".join(missing))
+        raise SystemExit(_("fichiers manquants :") + "\n  " + "\n  ".join(missing))
 
 
 def install(force=False):
     _check_files(True)
     if pid():
-        raise SystemExit("la VM tourne déjà")
+        raise SystemExit(_("la VM tourne déjà"))
     if DISK.exists() and not force:
-        raise SystemExit(f"{DISK} existe déjà (--force pour réinstaller)")
+        raise SystemExit(_("{disk} existe déjà (--force pour réinstaller)", disk=DISK))
     load_config()
     subprocess.run([QEMU_IMG, "create", "-q", "-f", "qcow2", str(DISK), DISK_SIZE], check=True)
     shutil.copyfile(OVMF_VARS, VARS)
     build_share(install=True)
-    for s in (SERIAL, QMP):
+    for s in (SERIAL, QMP, QMP_HOST):
         s.unlink(missing_ok=True)
-    print("installation de Windows : la fenêtre QEMU se ferme d'elle-même à la fin")
+    print(_("installation de Windows : la fenêtre QEMU se ferme automatiquement à la fin"))
     proc = subprocess.Popen(qemu_args(True))
     threading.Thread(target=_press_keys_during_boot, daemon=True).start()
+    reasons = []
+    watcher = threading.Thread(target=_watch_shutdown, args=(reasons,), daemon=True)
+    watcher.start()
     rc = proc.wait()
-    print(f"QEMU terminé (code {rc})")
+    watcher.join(2)
+    print(_("QEMU terminé (code {rc})", rc=rc))
+    # fin normale : boot.ps1 éteint Windows ; fenêtre fermée, QEMU tué… : disque inutilisable,
+    # retiré pour que l'assistant ne le prenne pas pour un Windows installé
+    if reasons[-1:] != ["guest-shutdown"]:
+        DISK.unlink(missing_ok=True)
+        print(_("installation interrompue ({reason}) : disque supprimé, relancez l'installation",
+                reason=reasons[-1] if reasons else _("QEMU arrêté")))
+        return rc or 1
     return rc
+
+
+def _watch_shutdown(reasons):
+    """Raisons des événements SHUTDOWN de QEMU (guest-shutdown, host-ui…), sur le second moniteur."""
+    for _i in range(100):
+        try:
+            qmp = Qmp(QMP_HOST, timeout=None)
+            break
+        except OSError:
+            time.sleep(0.1)
+    else:
+        return
+    try:
+        for line in qmp.file:
+            msg = json.loads(line)
+            if msg.get("event") == "SHUTDOWN":
+                reasons.append(msg.get("data", {}).get("reason"))
+    except (OSError, ValueError):
+        pass
+    finally:
+        qmp.close()
 
 
 def share_tag(label):
@@ -508,6 +580,12 @@ def add_share(path, label=None):
     return tag, drives[0], label
 
 
+def ps_quote(text):
+    """Chaîne PowerShell entre apostrophes. PowerShell prend aussi les apostrophes
+    typographiques (’ ‘ ‚ ‛) pour des délimiteurs : toutes doublées."""
+    return "'" + re.sub("['\u2018\u2019\u201a\u201b]", lambda m: m.group() * 2, str(text)) + "'"
+
+
 def mount_script(tag, drive, label):
     """Script PowerShell qui monte un dossier branché à chaud (WinFsp) ; affiche True si le
     lecteur répond."""
@@ -515,7 +593,7 @@ def mount_script(tag, drive, label):
             f"start virtiofs vfs{tag} {tag} {drive} | Out-Null; "
             f"New-Item -Force 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\"
             f"MountPoints2\\{drive.rstrip(':')}' | Set-ItemProperty -Name _LabelFromReg "
-            f"-Value '{label.replace(chr(39), chr(39) * 2)} (Linux)'; "
+            f"-Value {ps_quote(label + ' (Linux)')}; "
             f"foreach ($i in 1..10) {{ if (Test-Path '{drive}\\') {{ break }}; Start-Sleep 1 }}; "
             + HEAL_SCRIPT + f"; Test-Path '{drive}\\'")
 
@@ -597,6 +675,7 @@ def hotplug_share(tag, path):
 def start(wait_socket=True):
     if pid():
         return
+    ensure_data()  # dossiers créés avant le passage en 0700
     _check_files(False)
     build_share(install=False)
     for s in (SERIAL, QMP, QMP_HOST):
@@ -612,13 +691,13 @@ def start(wait_socket=True):
                 gpu.bind(card)
                 GPU_STATE.write_text(json.dumps(card))
             except (OSError, subprocess.SubprocessError) as e:
-                print(f"carte graphique dédiée non prêtée : {e}", file=sys.stderr)
+                print(_("carte graphique dédiée non prêtée : {e}", e=e), file=sys.stderr)
                 card = None
     with open(LOGFILE, "ab") as log:
         if PROFILE == "yttrium":
             subprocess.Popen(qemu_args(False), env=qemu_env(), stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                              start_new_session=True)
-            for _ in range(50):
+            for _i in range(50):
                 if pid():
                     break
                 time.sleep(0.1)
@@ -629,7 +708,7 @@ def start(wait_socket=True):
                 release_gpu()
                 raise
     if wait_socket:
-        for _ in range(50):
+        for _i in range(50):
             if SERIAL.exists():
                 break
             time.sleep(0.1)
@@ -641,15 +720,19 @@ def stop(timeout=60):
         return
     try:
         q = Qmp()
+        # VM en pause (veille de l'hôte) : elle ne verrait pas l'ACPI et serait tuée à
+        # l'échéance, sans que Windows propose d'enregistrer les documents ouverts
+        if not q.cmd("query-status").get("running", True):
+            q.cmd("cont")
         q.cmd("system_powerdown")
         q.close()
     except (OSError, EOFError, RuntimeError):
         pass
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline and pid():
-        time.sleep(0.5)
-    if pid():
-        os.kill(p, 15)
+    if not _wait_exit(p, timeout):
+        os.kill(p, signal.SIGTERM)
+        if not _wait_exit(p, 10):
+            os.kill(p, signal.SIGKILL)
+            _wait_exit(p, 5)
     # sockets laissés par QEMU : sans eux on sait que la VM est arrêtée
     for sock in (SERIAL, QMP, QMP_HOST):
         sock.unlink(missing_ok=True)
@@ -674,5 +757,5 @@ def release_gpu():
 def status() -> str:
     p = pid()
     if not p:
-        return "arrêtée" if DISK.exists() else "non installée"
-    return f"en marche (pid {p})"
+        return _("arrêtée") if DISK.exists() else _("non installée")
+    return _("en marche (pid {pid})", pid=p)

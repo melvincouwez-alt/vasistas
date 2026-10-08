@@ -7,7 +7,13 @@ import urllib.error
 
 import pytest
 
-from vasistas import winiso
+from vasistas import i18n, winiso
+
+
+@pytest.fixture(autouse=True)
+def francais(monkeypatch):
+    # messages attendus en français, quelle que soit la langue du poste
+    monkeypatch.setattr(i18n, "_lang", "fr")
 
 ISO_URL = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_French_x64_v2.iso?t=x"
 PAGE = ('<select><option value="" selected>Choisir</option>'

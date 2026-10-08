@@ -15,18 +15,19 @@ import time
 from pathlib import Path
 
 from . import control, vm
+from .i18n import N_, _
 
 SCRIPT = Path(__file__).resolve().parent / "guest" / "slim.ps1"
 SNAPSHOT = "avant-allegement"
 CACHE = vm.DATA / "slim.json"  # dernier état lu, et mesure d'avant le premier allègement
-LEVELS = {1: "Léger", 2: "Fort", 3: "Maximal"}
+LEVELS = {1: N_("Léger"), 2: N_("Fort"), 3: N_("Maximal")}
 GROUPS = {
-    "telemetry": "Télémétrie et publicité",
-    "apps": "Applications",
-    "services": "Services",
-    "tasks": "Tâches planifiées",
-    "perf": "Mémoire et processeur",
-    "components": "Composants Windows",
+    "telemetry": N_("Télémétrie et publicité"),
+    "apps": N_("Applications"),
+    "services": N_("Services"),
+    "tasks": N_("Tâches planifiées"),
+    "perf": N_("Mémoire et processeur"),
+    "components": N_("Composants Windows"),
 }
 
 HKLM_POL = r"HKLM:\SOFTWARE\Policies\Microsoft"
@@ -48,16 +49,17 @@ def _svc(start, *names):
 CATALOG = [
     # -- télémétrie --
     {"key": "telemetry", "group": "telemetry", "level": 1,
-     "title": "Données de diagnostic au minimum",
-     "subtitle": "Stratégie AllowTelemetry à 0 (Windows Pro la traite comme « requises »), service DiagTrack et envoi WAP arrêtés",
+     "title": N_("Données de diagnostic au minimum"),
+     "subtitle": N_("Stratégie AllowTelemetry à 0 (Windows Pro la traite comme « requises »), service DiagTrack et envoi WAP arrêtés"),
      "reg": [_dw(fr"{HKLM_POL}\Windows\DataCollection", "AllowTelemetry", 0),
              _dw(fr"{HKLM_POL}\Windows\DataCollection", "DoNotShowFeedbackNotifications", 1),
              _dw(fr"{HKLM_POL}\Windows\Windows Error Reporting", "Disabled", 1),
              _dw(r"HKCU:\Software\Microsoft\Siuf\Rules", "NumberOfSIUFInPeriod", 0)],
      "svc": _svc(4, "DiagTrack", "dmwappushservice")},
     {"key": "ads", "group": "telemetry", "level": 1,
-     "title": "Publicité et suggestions",
-     "subtitle": "Identifiant publicitaire, expériences personnalisées, applis suggérées et installées en silence, astuces",
+     "title": N_("Publicité et suggestions"),
+     "subtitle": N_("Identifiant publicitaire, expériences personnalisées, applications suggérées et installées "
+                    "sans avertissement, astuces"),
      "reg": [_dw(fr"{HKLM_POL}\Windows\AdvertisingInfo", "DisabledByGroupPolicy", 1),
              _dw(r"HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled", 0),
              _dw(r"HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy",
@@ -73,16 +75,16 @@ CATALOG = [
              _dw(r"HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement",
                  "ScoobeSystemSettingEnabled", 0)]},
     {"key": "activity", "group": "telemetry", "level": 1,
-     "title": "Historique d'activité et saisie",
-     "subtitle": "Plus d'envoi de l'historique d'activité ni des données de frappe et d'écriture manuscrite",
+     "title": N_("Historique d'activité et saisie"),
+     "subtitle": N_("Plus d'envoi de l'historique d'activité ni des données de frappe et d'écriture manuscrite"),
      "reg": [_dw(fr"{HKLM_POL}\Windows\System", n, 0)
              for n in ("EnableActivityFeed", "PublishUserActivities", "UploadUserActivities")] + [
              _dw(r"HKCU:\Software\Microsoft\InputPersonalization", "RestrictImplicitTextCollection", 1),
              _dw(r"HKCU:\Software\Microsoft\InputPersonalization", "RestrictImplicitInkCollection", 1),
              _dw(r"HKCU:\Software\Microsoft\Personalization\Settings", "AcceptedPrivacyPolicy", 0)]},
     {"key": "search-web", "group": "telemetry", "level": 1,
-     "title": "Bing, Copilot et Recall",
-     "subtitle": "Recherche Windows locale seulement, Copilot, Recall et Click to Do coupés",
+     "title": N_("Bing, Copilot et Recall"),
+     "subtitle": N_("Recherche Windows locale seulement, Copilot, Recall et Click to Do coupés"),
      "reg": [_dw(fr"{HKCU_POL}\Windows\Explorer", "DisableSearchBoxSuggestions", 1),
              _dw(fr"{HKLM_POL}\Windows\Windows Search", "AllowCortana", 0),
              _dw(fr"{HKLM_POL}\Windows\Windows Search", "ConnectedSearchUseWeb", 0),
@@ -93,17 +95,17 @@ CATALOG = [
              _dw(fr"{HKLM_POL}\Windows\WindowsAI", "DisableClickToDo", 1),
              _dw(fr"{HKLM_POL}\Dsh", "AllowNewsAndInterests", 0)]},
     {"key": "office-telemetry", "group": "telemetry", "level": 1,
-     "title": "Télémétrie d'Office",
-     "subtitle": "Envoi de données et enquêtes coupés, expériences connectées facultatives aussi ; "
-                 "la co-édition et SharePoint restent",
+     "title": N_("Télémétrie d'Office"),
+     "subtitle": N_("Envoi de données et enquêtes coupés, expériences connectées facultatives aussi ; "
+                    "la co-édition et SharePoint restent"),
      "reg": [_dw(fr"{HKCU_POL}\office\common\clienttelemetry", "SendTelemetry", 3),
              _dw(fr"{HKCU_POL}\office\16.0\common\privacy", "controllerconnectedservicesenabled", 2),
              _dw(fr"{HKCU_POL}\office\16.0\common\feedback", "enabled", 0),
              _dw(fr"{HKCU_POL}\office\16.0\common\feedback", "surveyenabled", 0)]},
     {"key": "edge", "group": "telemetry", "level": 1,
-     "title": "Edge en arrière-plan",
-     "subtitle": "Démarrage anticipé, mode arrière-plan, données de diagnostic et barre latérale coupés ; "
-                 "WebView2 (Outlook, Teams) n'est pas touché",
+     "title": N_("Edge en arrière-plan"),
+     "subtitle": N_("Démarrage anticipé, mode arrière-plan, données de diagnostic et barre latérale coupés ; "
+                    "WebView2 (Outlook, Teams) n'est pas touché"),
      "reg": [_dw(fr"{HKLM_POL}\Edge", "StartupBoostEnabled", 0),
              _dw(fr"{HKLM_POL}\Edge", "BackgroundModeEnabled", 0),
              _dw(fr"{HKLM_POL}\Edge", "DiagnosticData", 0),
@@ -125,9 +127,9 @@ foreach ($l in ($B -split "`n")) { if ($l) { $i = $l.IndexOf('='); New-ItemPrope
 
     # -- applications --
     {"key": "apps-consumer", "group": "apps", "level": 1, "reversible": False,
-     "title": "Applis grand public",
-     "subtitle": "Clipchamp, Actualités, Météo, Bing, Xbox et jeux, Solitaire, Aide, Hub de commentaires, "
-                 "Dev Home, Power Automate, compagnons M365, Assistance rapide, Media Player",
+     "title": N_("Applications grand public"),
+     "subtitle": N_("Clipchamp, Actualités, Météo, Bing, Xbox et jeux, Solitaire, Aide, Hub de commentaires, "
+                    "Dev Home, Power Automate, compagnons M365, Assistance rapide, Media Player"),
      "appx": ["Clipchamp.Clipchamp", "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.BingSearch",
               "Microsoft.GamingApp", "Microsoft.Xbox.TCUI", "Microsoft.XboxGamingOverlay",
               "Microsoft.XboxIdentityProvider", "Microsoft.XboxSpeechToTextOverlay",
@@ -135,9 +137,9 @@ foreach ($l in ($B -split "`n")) { if ($l) { $i = $l.IndexOf('='); New-ItemPrope
               "Microsoft.Windows.DevHome", "Microsoft.PowerAutomateDesktop", "Microsoft.M365Companions",
               "MicrosoftCorporationII.QuickAssist", "Microsoft.ZuneMusic"]},
     {"key": "apps-extra", "group": "apps", "level": 2, "reversible": False,
-     "title": "Petites applis Windows",
-     "subtitle": "To Do, Alarmes, Caméra, Enregistreur vocal, Pense-bêtes, Photos, Mobile connecté (Phone Link), "
-                 "Widgets, gestionnaire IA ; gardées : Bloc-notes, Calculatrice, Paint, Capture, Terminal, Store",
+     "title": N_("Petites applications Windows"),
+     "subtitle": N_("To Do, Alarmes, Caméra, Enregistreur vocal, Pense-bêtes, Photos, Mobile connecté (Phone Link), "
+                    "Widgets, gestionnaire IA ; gardées : Bloc-notes, Calculatrice, Paint, Capture, Terminal, Store"),
      "appx": ["Microsoft.Todos", "Microsoft.WindowsAlarms", "Microsoft.WindowsCamera",
               "Microsoft.WindowsSoundRecorder", "Microsoft.MicrosoftStickyNotes", "Microsoft.Windows.Photos",
               "Microsoft.YourPhone", "MicrosoftWindows.CrossDevice", "MicrosoftWindows.Client.WebExperience",
@@ -145,29 +147,30 @@ foreach ($l in ($B -split "`n")) { if ($l) { $i = $l.IndexOf('='); New-ItemPrope
 
     # -- services --
     {"key": "svc-light", "group": "services", "level": 2,
-     "title": "Services sans usage dans la VM",
-     "subtitle": "Géolocalisation, liens distribués, radios, cartes, Xbox, appareils connectés, synchronisation "
-                 "Courrier/Contacts, compatibilité des programmes, inventaire, luminosité, MIDI, IA Windows",
+     "title": N_("Services sans usage dans la VM"),
+     "subtitle": N_("Géolocalisation, liens distribués, radios, cartes, Xbox, appareils connectés, synchronisation "
+                    "Courrier/Contacts, compatibilité des programmes, inventaire, luminosité, MIDI, IA Windows"),
      "svc": _svc(4, "lfsvc", "TrkWks", "RmSvc", "MapsBroker", "XblAuthManager", "XblGameSave",
                  "XboxNetApiSvc", "XboxGipSvc", "CDPSvc", "CDPUserSvc_*", "OneSyncSvc_*", "PcaSvc",
                  "InventorySvc", "DisplayEnhancementService", "midisrv", "WSAIFabricSvc", "whesvc",
                  "iphlpsvc", "lmhosts", "SstpSvc", "WerSvc")},
     {"key": "sysmain", "group": "services", "level": 2,
-     "title": "Préchargement (SysMain)",
-     "subtitle": "Remplit la mémoire avec des applis devinées ; inutile sur un disque virtuel, coûte de la RAM",
+     "title": N_("Préchargement (SysMain)"),
+     "subtitle": N_("Précharge en mémoire les applications que Windows prévoit d'ouvrir ; inutile sur un disque "
+                    "virtuel, consomme de la RAM"),
      "svc": _svc(4, "SysMain")},
     {"key": "wsearch", "group": "services", "level": 2,
-     "title": "Indexation (Windows Search)",
-     "subtitle": "Outlook nouveau cherche côté serveur ; la recherche du menu Démarrer devient plus lente sur les fichiers",
+     "title": N_("Indexation (Windows Search)"),
+     "subtitle": N_("Outlook nouveau cherche côté serveur ; la recherche du menu Démarrer devient plus lente sur les fichiers"),
      "svc": _svc(4, "WSearch")},
     {"key": "svc-heavy", "group": "services", "level": 3,
-     "title": "Partage de fichiers entrant et diagnostic",
-     "subtitle": "Serveur SMB (les dossiers passent par virtiofs) et service de stratégie de diagnostic (dépannage réseau)",
+     "title": N_("Partage de fichiers entrant et diagnostic"),
+     "subtitle": N_("Serveur SMB (les dossiers passent par virtiofs) et service de stratégie de diagnostic (dépannage réseau)"),
      "svc": _svc(4, "LanmanServer", "DPS", "WdiServiceHost", "WdiSystemHost")},
     {"key": "updates", "group": "services", "level": 1,
-     "title": "Mises à jour Windows en manuel",
-     "subtitle": "Plus d'installation en fond ni de redémarrage imposé ; bouton « Mettre à jour Windows » plus bas. "
-                 "Store et Office restent automatiques ; pas de partage de mises à jour en pair à pair",
+     "title": N_("Mises à jour Windows en manuel"),
+     "subtitle": N_("Plus d'installation en fond ni de redémarrage imposé ; bouton « Mettre à jour Windows » plus bas. "
+                    "Store et Office restent automatiques ; pas de partage de mises à jour en pair à pair"),
      "reg": [_dw(fr"{HKLM_POL}\Windows\WindowsUpdate\AU", "NoAutoUpdate", 1),
              _dw(fr"{HKLM_POL}\Windows\WindowsUpdate\AU", "AUOptions", 2),
              _dw(fr"{HKLM_POL}\Windows\WindowsUpdate\AU", "NoAutoRebootWithLoggedOnUsers", 1),
@@ -175,8 +178,8 @@ foreach ($l in ($B -split "`n")) { if ($l) { $i = $l.IndexOf('='); New-ItemPrope
 
     # -- tâches planifiées --
     {"key": "tasks-telemetry", "group": "tasks", "level": 1,
-     "title": "Tâches de collecte",
-     "subtitle": "Programme d'amélioration, évaluation de compatibilité, diagnostic disque, commentaires, rapports d'erreurs",
+     "title": N_("Tâches de collecte"),
+     "subtitle": N_("Programme d'amélioration, évaluation de compatibilité, diagnostic disque, commentaires, rapports d'erreurs"),
      "task": [r"\Microsoft\Windows\Application Experience\*",
               r"\Microsoft\Windows\Customer Experience Improvement Program\*",
               r"\Microsoft\Windows\Autochk\Proxy",
@@ -187,17 +190,17 @@ foreach ($l in ($B -split "`n")) { if ($l) { $i = $l.IndexOf('='); New-ItemPrope
               r"\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem",
               r"\Microsoft\XblGameSave\XblGameSaveTask"]},
     {"key": "maintenance", "group": "tasks", "level": 3,
-     "title": "Maintenance automatique",
-     "subtitle": "Défragmentation planifiée et maintenance de nuit coupées (le disque virtuel reçoit déjà les TRIM)",
+     "title": N_("Maintenance automatique"),
+     "subtitle": N_("Défragmentation planifiée et maintenance de nuit coupées (le disque virtuel reçoit déjà les TRIM)"),
      "task": [r"\Microsoft\Windows\Defrag\ScheduledDefrag"],
      "reg": [_dw(r"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance",
                  "MaintenanceDisabled", 1)]},
 
     # -- mémoire et processeur --
     {"key": "defender", "group": "perf", "level": 2,
-     "title": "Defender bridé",
-     "subtitle": "Protection en temps réel gardée ; analyses à 20 % du processeur, priorité basse, "
-                 "seulement quand Windows est inactif ; agent Vasistas exclu",
+     "title": N_("Defender bridé"),
+     "subtitle": N_("Protection en temps réel gardée ; analyses à 20 % du processeur, priorité basse, "
+                    "seulement quand Windows est inactif ; agent Vasistas exclu"),
      "ps": {
          "test": r"$m = Get-MpPreference; $m.ScanAvgCPULoadFactor -eq 20 -and $m.EnableLowCpuPriority -and $m.ScanOnlyIfIdleEnabled",
          "apply": r"""
@@ -213,15 +216,16 @@ Set-MpPreference -ScanAvgCPULoadFactor ([int]$v[0]) -EnableLowCpuPriority ([bool
 Remove-MpPreference -ExclusionProcess 'Vasistas.Agent.exe' -ExclusionPath 'C:\Program Files\Vasistas'
 """}},
     {"key": "background", "group": "perf", "level": 2,
-     "title": "Applis en arrière-plan",
-     "subtitle": "Les applis du Store ne tournent plus fenêtre fermée, sauf Teams et Outlook (notifications)",
+     "title": N_("Applications en arrière-plan"),
+     "subtitle": N_("Les applications du Store ne fonctionnent plus une fois leur fenêtre fermée, sauf Teams et "
+                    "Outlook (notifications)"),
      "reg": [_dw(fr"{HKLM_POL}\Windows\AppPrivacy", "LetAppsRunInBackground", 2),
              {"path": fr"{HKLM_POL}\Windows\AppPrivacy", "name": "LetAppsRunInBackground_ForceAllowTheseApps",
               "type": "MultiString",
               "value": ["MSTeams_8wekyb3d8bbwe", "Microsoft.OutlookForWindows_8wekyb3d8bbwe"]}]},
     {"key": "tray", "group": "perf", "level": 2,
-     "title": "Icône Sécurité Windows au démarrage",
-     "subtitle": "La barre des tâches est masquée : l'icône ne sert à rien (Defender continue de tourner)",
+     "title": N_("Icône Sécurité Windows au démarrage"),
+     "subtitle": N_("La barre des tâches est masquée : l'icône est inutile (Defender reste actif)"),
      "ps": {
          "test": r"-not (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run).SecurityHealth",
          "apply": r"""
@@ -234,14 +238,15 @@ param($B)
 if ($B) { New-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name SecurityHealth -PropertyType ExpandString -Value $B -Force | Out-Null }
 """}},
     {"key": "hibernate", "group": "perf", "level": 2,
-     "title": "Veille prolongée et démarrage rapide",
-     "subtitle": "Inutiles : Vasistas met la VM en pause lui-même ; libère le fichier hiberfil.sys",
+     "title": N_("Veille prolongée et démarrage rapide"),
+     "subtitle": N_("Inutiles : Vasistas met la VM en pause lui-même ; libère le fichier hiberfil.sys"),
      "ps": {"test": r"-not (Test-Path C:\hiberfil.sys -ErrorAction SilentlyContinue)",
             "apply": "powercfg /hibernate off | Out-Null",
             "restore": "powercfg /hibernate on | Out-Null"}},
     {"key": "pagefile", "group": "perf", "level": 3,
-     "title": "Fichier d'échange fixe (2 Go)",
-     "subtitle": "Taille fixe au lieu de variable : plus d'agrandissements en cours de route (prend effet au redémarrage)",
+     "title": N_("Fichier d'échange fixe (2 Go)"),
+     "subtitle": N_("Taille fixe au lieu de variable : le fichier n'est plus agrandi en cours d'utilisation (prend "
+                    "effet au redémarrage)"),
      "ps": {
          "test": r"$p = Get-CimInstance Win32_PageFileSetting; $p -and $p.InitialSize -eq 2048 -and $p.MaximumSize -eq 2048",
          "apply": r"""
@@ -258,35 +263,35 @@ if ($B -eq 'True') { Set-CimInstance (Get-CimInstance Win32_ComputerSystem) -Pro
 """}},
 
     {"key": "memcomp", "group": "perf", "level": 2,
-     "title": "Compression de la mémoire",
-     "subtitle": "Windows compresse la mémoire peu utilisée au lieu de l'écrire sur disque : moins de RAM "
-                 "occupée, et le ballon en rend davantage à Linux",
+     "title": N_("Compression de la mémoire"),
+     "subtitle": N_("Windows compresse la mémoire peu utilisée au lieu de l'écrire sur disque : moins de RAM "
+                    "occupée, et le ballon en rend davantage à Linux"),
      "ps": {"test": "(Get-MMAgent).MemoryCompression",
             "apply": "Enable-MMAgent -MemoryCompression",
             "restore": "Disable-MMAgent -MemoryCompression"}},
     {"key": "svc-extra", "group": "services", "level": 2,
-     "title": "Découverte réseau et BitLocker",
-     "subtitle": "Découverte UPnP (SSDP) et service BitLocker : ni l'un ni l'autre ne servent dans la VM",
+     "title": N_("Découverte réseau et BitLocker"),
+     "subtitle": N_("Découverte UPnP (SSDP) et service BitLocker : ni l'un ni l'autre ne servent dans la VM"),
      "svc": _svc(4, "SSDPSRV", "upnphost", "BDESVC", "FDResPub", "fdPHost")},
     {"key": "apps-teams", "group": "apps", "level": 2, "reversible": False,
-     "title": "Teams dans Windows",
-     "subtitle": "Doublon de Teams sous Linux (Microsoft 365 en ligne)",
+     "title": N_("Teams dans Windows"),
+     "subtitle": N_("Doublon de Teams sous Linux (Microsoft 365 en ligne)"),
      "appx": ["MSTeams"]},
 
     # -- composants --
     {"key": "caps", "group": "components", "level": 3, "reversible": False,
-     "title": "Composants facultatifs",
-     "subtitle": "Pilotes Wi-Fi et Ethernet physiques, Windows Hello visage, Internet Explorer, enregistreur d'actions, "
-                 "reconnaissance d'écriture, de maths, de la parole et OCR, PowerShell ISE, Lecteur Windows Media, "
-                 "fonds d'écran ; la synthèse vocale (Lecture à voix haute de Word) est gardée",
+     "title": N_("Composants facultatifs"),
+     "subtitle": N_("Pilotes Wi-Fi et Ethernet physiques, Windows Hello visage, Internet Explorer, enregistreur d'actions, "
+                    "reconnaissance d'écriture, de maths, de la parole et OCR, PowerShell ISE, Lecteur Windows Media, "
+                    "fonds d'écran ; la synthèse vocale (Lecture à voix haute de Word) est gardée"),
      "cap": ["Microsoft.Windows.Wifi.Client.", "Microsoft.Windows.Ethernet.Client.", "Hello.Face.",
              "Browser.InternetExplorer~", "App.StepsRecorder~", "MathRecognizer~", "Language.Handwriting~",
              "Language.Speech~", "Language.OCR~", "Microsoft.Windows.PowerShell.ISE~",
              "Media.WindowsMediaPlayer~", "Microsoft.Wallpapers.Extended~"]},
     {"key": "features", "group": "components", "level": 3,
-     "title": "Fonctionnalités facultatives",
-     "subtitle": "Dossiers de travail, SMB Direct, impression Internet, Lecteur Windows Media hérité ; "
-                 "Microsoft Print to PDF est gardé",
+     "title": N_("Fonctionnalités facultatives"),
+     "subtitle": N_("Dossiers de travail, SMB Direct, impression Internet, Lecteur Windows Media hérité ; "
+                    "Microsoft Print to PDF est gardé"),
      "feat": ["WorkFolders-Client", "SmbDirect", "Printing-Foundation-InternetPrinting-Client",
               "WindowsMediaPlayer", "MediaPlayback"]},
 ]
@@ -361,7 +366,7 @@ def keys_for_level(level):
 
 def _qmp(command, **args):
     # pas q.cmd(...) : ses propres paramètres s'appellent « name », comme celui de l'instantané
-    q = vm.Qmp()
+    q = vm.Qmp(timeout=600)  # voir restore._qmp
     try:
         q.file.write(json.dumps({"execute": command, "arguments": args}).encode() + b"\n")
         q.file.flush()
@@ -394,7 +399,7 @@ def snapshot():
 def rollback():
     """Revient à l'instantané : VM arrêtée obligatoire."""
     if vm.pid():
-        raise RuntimeError("arrête d'abord Windows")
+        raise RuntimeError(_("arrêtez d'abord Windows"))
     subprocess.run([vm.QEMU_IMG, "snapshot", "-a", SNAPSHOT, str(vm.DISK)], check=True)
 
 

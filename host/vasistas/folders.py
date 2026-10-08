@@ -17,21 +17,22 @@ from pathlib import Path
 from gi.repository import GLib
 
 from . import control, files, vm
+from .i18n import N_, _
 
 # clé, nom affiché, dossier Linux (XDG), identifiant Windows (KNOWNFOLDERID), dossier
 # d'origine sous %USERPROFILE%, proposé par « Tout relier »
 FOLDERS = [
-    ("documents", "Documents", GLib.UserDirectory.DIRECTORY_DOCUMENTS,
+    ("documents", N_("Documents"), GLib.UserDirectory.DIRECTORY_DOCUMENTS,
      "FDD39AD0-238F-46AF-ADB4-6C85480369C7", "Documents", True),
-    ("downloads", "Téléchargements", GLib.UserDirectory.DIRECTORY_DOWNLOAD,
+    ("downloads", N_("Téléchargements"), GLib.UserDirectory.DIRECTORY_DOWNLOAD,
      "374DE290-123F-4565-9164-39C4925E467B", "Downloads", True),
-    ("pictures", "Images", GLib.UserDirectory.DIRECTORY_PICTURES,
+    ("pictures", N_("Images"), GLib.UserDirectory.DIRECTORY_PICTURES,
      "33E28130-4E1E-4676-835A-98395C3BC3BB", "Pictures", True),
-    ("music", "Musique", GLib.UserDirectory.DIRECTORY_MUSIC,
+    ("music", N_("Musique"), GLib.UserDirectory.DIRECTORY_MUSIC,
      "4BD8D571-6D19-48D3-BE97-422220080E43", "Music", False),
-    ("videos", "Vidéos", GLib.UserDirectory.DIRECTORY_VIDEOS,
+    ("videos", N_("Vidéos"), GLib.UserDirectory.DIRECTORY_VIDEOS,
      "18989B1D-99B5-455B-841C-AB7C74E4DDFC", "Videos", False),
-    ("desktop", "Bureau", GLib.UserDirectory.DIRECTORY_DESKTOP,
+    ("desktop", N_("Bureau"), GLib.UserDirectory.DIRECTORY_DESKTOP,
      "B4BFCC3A-DB2C-424C-B029-7FE99A87C641", "Desktop", False),
 ]
 BY_KEY = {f[0]: f for f in FOLDERS}
@@ -59,7 +60,7 @@ function Set-KF($id, $path) {
 
 def _q(text):
     """Chaîne PowerShell entre apostrophes."""
-    return "'" + str(text).replace("'", "''") + "'"
+    return vm.ps_quote(text)
 
 
 def linux_dir(key) -> Path:
@@ -78,7 +79,7 @@ def _json_out(out):
         line = line.strip()
         if line.startswith("{"):
             return json.loads(line)
-    raise RuntimeError(out.strip()[-300:] or "pas de réponse de Windows")
+    raise RuntimeError(out.strip()[-300:] or _("Windows ne répond pas"))
 
 
 def status():
@@ -102,14 +103,14 @@ def _ensure_share(key):
         return win
     added = vm.add_share(path, BY_KEY[key][1])
     if added is None:
-        raise RuntimeError("plus de lettre de lecteur libre dans Windows")
+        raise RuntimeError(_("aucune lettre de lecteur n'est disponible dans Windows"))
     tag, drive, label = added
     if not vm.hotplug_share(tag, path):
-        raise RuntimeError(f"« {label} » sera partagé au prochain démarrage de Windows ; "
-                           "relier le dossier ensuite")
+        raise RuntimeError(_("« {label} » sera partagé au prochain démarrage de Windows ; reliez le dossier après ce "
+                             "démarrage", label=label))
     out = _exec(vm.mount_script(tag, drive, label))
     if "True" not in out:
-        raise RuntimeError(f"le lecteur {drive} ne répond pas dans Windows")
+        raise RuntimeError(_("le lecteur {drive} ne répond pas dans Windows", drive=drive))
     return files.to_windows(path)
 
 

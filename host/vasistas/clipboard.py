@@ -8,6 +8,7 @@ chaque changement tant qu'elle l'a. Une copie faite dans Windows arrive par l'ag
 import base64
 import hashlib
 import logging
+import threading
 
 from gi.repository import Gdk, Gio, GLib
 
@@ -27,6 +28,9 @@ class ClipboardSync:
         self.clip.connect("changed", self._on_changed)
         self.last_sent = None             # empreinte du dernier contenu envoyé à l'invité
         self.setting = False
+        # contenu Linux changé depuis le dernier envoi : sans ça, chaque passage d'une fenêtre
+        # Windows à l'autre relisait tout (une capture d'écran réencodée en PNG dans le fil GTK)
+        self.dirty = True
 
     # -- Windows -> Linux --
 
@@ -62,13 +66,15 @@ class ClipboardSync:
     def _on_changed(self, clip):
         if self.setting or clip.is_local():
             return
+        self.dirty = True
         if self.has_focus():
             self.push()
 
     def push(self):
         """Lit le presse-papiers Linux et l'envoie à l'invité s'il a changé."""
-        if self.clip.is_local():
-            return  # c'est nous qui l'avons posé (copie venant de Windows)
+        if self.clip.is_local() or not self.dirty:
+            return  # c'est nous qui l'avons posé (copie venant de Windows), ou rien de neuf
+        self.dirty = False
         formats = self.clip.get_formats()
         state = {"text": None, "html": None, "png": None, "pending": 0}
         cancel = Gio.Cancellable()
@@ -94,13 +100,20 @@ class ClipboardSync:
     def _on_texture(self, clip, result, state, done):
         try:
             texture = clip.read_texture_finish(result)
-            if texture is not None:
-                png = texture.save_to_png_bytes().get_data()
-                if len(png) <= MAX_BYTES:
-                    state["png"] = base64.b64encode(png).decode()
         except GLib.Error as e:
             log.debug("lecture image : %s", e.message)
-        done()
+            texture = None
+        if texture is None:
+            done()
+            return
+
+        # PNG d'une capture d'écran : 250 ms et plus, hors du fil GTK (la texture est immuable)
+        def encode():
+            png = texture.save_to_png_bytes().get_data()
+            if len(png) <= MAX_BYTES:
+                state["png"] = base64.b64encode(png).decode()
+            GLib.idle_add(lambda: done() or False)
+        threading.Thread(target=encode, name="vasistas-clip-png", daemon=True).start()
 
     def _on_text(self, clip, result, state, done):
         try:

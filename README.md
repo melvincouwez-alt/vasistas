@@ -24,7 +24,7 @@ control, as light as we can make it and smooth enough for the professional tools
 every day.
 
 It is built for elementary OS and should work on other Debian and Ubuntu based systems with
-GTK 4 and Granite. Version 0.5 is an early, experimental release.
+GTK 4 and Granite. Version 0.9 is a beta release.
 
 ## Our approach
 
@@ -62,12 +62,36 @@ milliseconds. It is not tuned for 3D or games, as explained below.
 - A setup assistant downloads Windows from Microsoft in the language you pick, installs it
   unattended with a local account, then installs Microsoft Office and other common
   applications.
-- A companion app starts or stops Windows, chooses which applications appear in the menu,
-  decides which file types open in Windows, trims Windows down and checks for updates.
+- You choose which screen each application opens on (the active one, the last one used, or a
+  given monitor). Vasistas remembers the size and screen of each application for each
+  combination of screens, never opens a window larger than its screen, and "Reset displays"
+  (companion app, panel indicator or `vasistas reset-windows`) puts every window back, centred,
+  at a sensible size. It also happens by itself when a screen is plugged in or unplugged.
+- Windows follows the desktop: dark mode, accent colour and greyscale font smoothing. Windows
+  notifications become desktop notifications, and the icons of its notification area
+  (OneDrive, Teams…) show up in the panel.
+- Linux printers are available in Windows, without opening CUPS to the network.
+- A panel indicator shows whether Windows is running, opens recent applications and starts,
+  suspends or stops Windows.
+- A single slider sets how Windows draws: Optimized for mail and documents, Balanced, or Smooth
+  for Power BI, video and long scrolls. An application can keep its own mode while it is in the
+  foreground.
+- Power follows the situation: less on battery, more while a heavy application such as Power BI
+  is open. Windows can be prepared at login, started suspended, and shut down after a while
+  without any open window.
+- Restore points save the Windows disk before Windows Update and before each installation, and
+  you can go back to one in a click.
+- A companion app, with a dashboard, starts or stops Windows, chooses which applications appear
+  in the menu, decides which file types open in Windows, trims Windows down, runs a diagnosis
+  that fixes what it can and writes a report without personal data, and checks for updates.
+- The interface is available in English and French.
 - Experimental: windows whose title bar is drawn by Windows (File Explorer, classic dialogs)
   can get the desktop's own title bar instead, with its rounded corners and shadow. Office, Edge
   and applications that draw their own title bar keep theirs. Turn it on in the companion app,
-  under Windows > Appearance.
+  under Settings > Experimental.
+- Experimental: a modified display driver gives Windows the rhythm of a real 60 Hz screen. It
+  is installed by hand, needs Windows' test-signing mode and is turned off on battery; see
+  [docs/pilote-maison.md](docs/pilote-maison.md) (in French).
 
 ## How it works
 
@@ -89,7 +113,7 @@ the virtual machine, Windows renders in software: office and business applicatio
 responsive, but 3D, demanding video and games do not, and anti-cheat systems usually refuse
 virtual machines. Passing a dedicated graphics card to Windows is possible but experimental.
 
-There is no webcam or USB passthrough yet, and the interface is currently in French only.
+There is no webcam or USB passthrough yet.
 
 ### Sharpness on several screens
 
@@ -121,8 +145,8 @@ To keep this to a minimum:
 Download `vasistas-<version>.tar.gz` from the latest release, then:
 
 ```
-tar xf vasistas-0.5.2.tar.gz
-cd vasistas-0.5.2
+tar xf vasistas-0.9.0.tar.gz
+cd vasistas-0.9.0
 ./install.sh
 ```
 
@@ -171,6 +195,13 @@ C# for .NET Framework 4.8 (`guest/Vasistas.Agent`, built with `dotnet build -c R
 ## License
 
 Vasistas is released under the MIT License (see [LICENSE](LICENSE)).
+
+It includes [pycdlib](https://github.com/clalancette/pycdlib) (LGPL 2.1, in `host/vendor`) to
+build the setup CD, and the Windows agent embeds the UI Automation interop types of
+[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) (MIT) to
+read Windows notifications and notification area icons.
+The agent also embeds the official Windows build of [zstd](https://github.com/facebook/zstd)
+1.5.7 (`libzstd.dll`, BSD) to compress window tiles.
 
 Windows, Office, Power BI and the other software mentioned belong to their publishers. Vasistas
 does not ship any Microsoft software or license; it downloads the official installers.

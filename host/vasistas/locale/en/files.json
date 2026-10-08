@@ -1,0 +1,20 @@
+{
+  "Fichiers": "Files",
+  "Les fichiers des types listés ci-dessous s'ouvrent dans les applications Windows par un double-clic dans l'application Fichiers.": "Files of the types listed below open in Windows applications when double-clicked in the Files application.",
+  ".{ext} s'ouvre dans {name}": ".{ext} opens in {name}",
+  ".{ext} ne s'ouvre plus dans {name}": ".{ext} no longer opens in {name}",
+  "Rétablir les choix par défaut": "Restore default choices",
+  "Ouvrir les fichiers Office et Power BI dans Windows, et les autres fichiers sous Linux": "Open Office and Power BI files in Windows, and other files in Linux",
+  "Windows ne voit que les dossiers partagés (page Dossiers). Pour un fichier rangé ailleurs, Vasistas propose d'en ouvrir une copie dans Téléchargements ou de partager son dossier. Une extension retirée revient à l'application qui l'ouvrait avant.": "Windows only sees shared folders (Folders page). For a file stored elsewhere, Vasistas offers to open a copy in Downloads or to share its folder. A removed extension goes back to the app that opened it before.",
+  "Extension, par exemple csv": "Extension, for example csv",
+  "Ouvrir une autre extension dans {name}": "Open another extension in {name}",
+  "Choix par défaut rétablis": "Defaults restored",
+  "Actuellement ouvert dans {name}": "Currently opened in {name}",
+  "Extension invalide": "Invalid extension",
+  "Ouvert dans {name} (Windows)": "Opened in {name} (Windows)",
+  "Ouvert sous Linux": "Opened on Linux",
+  "Windows n'a accès qu'aux dossiers partagés. Pour un fichier situé dans un autre dossier, Vasistas propose d'en ouvrir une copie.": "Windows only has access to shared folders. For a file located in another folder, Vasistas offers to open a copy.",
+  "Modifier": "Edit",
+  "Types de fichiers ouverts dans {name}": "File types opened in {name}",
+  "Aucun type de fichier associé : les fichiers correspondants s'ouvrent sous Linux": "No file type assigned: the matching files open in Linux"
+}

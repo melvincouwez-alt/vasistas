@@ -1,0 +1,34 @@
+{
+  "0.9.0": {
+    "fr": [
+      "Vasistas 0.9 (bêta) réunit tout le travail fait depuis la 0.5.2 : application entièrement redessinée, pages principales dans la barre de titre, le reste dans le menu.",
+      "Accueil en tableau de bord : état de Windows et ses commandes, applications ouvertes avec leur mode d'affichage, écran de Windows en direct, niveau de performance réglable en un clic et raccourcis.",
+      "Performances : un seul curseur à trois modes (Optimisé, Équilibré, Fluide), chacun expliqué, et des modes réservés à une application tant qu'elle est au premier plan. Power BI est en Fluide par défaut.",
+      "Affichage plus fluide : les fenêtres recouvertes sont capturées par Windows.Graphics.Capture, seules les zones changées sont copiées et compressées en zstd. Minuterie de Windows à 1 ms sur secteur, rendu Vulkan sous Linux.",
+      "Écrans et fenêtres : chaque application s'ouvre sur l'écran de votre choix, sa taille est retenue pour chaque combinaison d'écrans, aucune fenêtre ne dépasse son écran, et « Réinitialiser les affichages » remet tout en place.",
+      "Indicateur dans le panneau : état de Windows, applications récentes et gestes courants.",
+      "Windows suit le bureau : thème clair ou sombre, couleur d'accent, lissage des polices. Ses notifications arrivent sur le bureau et les icônes de sa zone de notification dans le panneau.",
+      "Imprimantes Linux disponibles dans Windows ; la touche Super et Alt+Tab peuvent aller à Windows.",
+      "Puissance adaptée : moins sur batterie, plus pour les applications lourdes ; arrêt automatique sans fenêtre ouverte, démarrage en veille.",
+      "Onglet Restauration : points avant Windows Update, avant chaque installation et avant l'allègement, retour en un clic.",
+      "Diagnostic avec réparations et rapport sans données personnelles ; visite guidée et bouton « ? » sur chaque page.",
+      "Pilote d'écran maison (expérimental, à poser soi-même) : un vrai rythme de 60 images par seconde pour Windows, coupé quand l'ordinateur est sur batterie. Une notice explique ce qu'il fait et comment revenir en arrière.",
+      "Vasistas parle français et anglais."
+    ],
+    "en": [
+      "Vasistas 0.9 (beta) brings together everything done since 0.5.2: fully redesigned app, main pages in the title bar, the rest in the menu.",
+      "Home is a dashboard: Windows status and controls, open apps with their display mode, live Windows screen, one-click performance level and shortcuts.",
+      "Performance: a single slider with three modes (Optimized, Balanced, Smooth), each explained, and modes set for an app while it is in the foreground. Power BI is set to Smooth by default.",
+      "Smoother display: covered windows are captured with Windows.Graphics.Capture, only the areas that changed are copied and compressed with zstd. Windows timer at 1 ms when plugged in, Vulkan rendering on Linux.",
+      "Screens and windows: each app opens on the screen you choose, its size is remembered for each combination of screens, no window is larger than its screen, and “Reset displays” puts everything back in place.",
+      "Panel indicator: Windows status, recent apps and everyday actions.",
+      "Windows follows the desktop: light or dark theme, accent colour, font smoothing. Its notifications show up on the desktop and its notification area icons in the panel.",
+      "Linux printers available in Windows; the Super key and Alt+Tab can go to Windows.",
+      "Power that adapts: less on battery, more for heavy apps; automatic shutdown with no open window, start suspended.",
+      "Restoration tab: restore points before Windows Update, before each install and before slimming, back in one click.",
+      "Diagnostics with fixes and a report without personal data; guided tour and a “?” button on each page.",
+      "Home-made display driver (experimental, installed by hand): a real 60 frames per second rhythm for Windows, turned off on battery. A guide explains what it does and how to go back.",
+      "Vasistas speaks English and French."
+    ]
+  }
+}

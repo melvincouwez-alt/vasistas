@@ -15,6 +15,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("GdkWayland", "4.0")
 from gi.repository import GdkWayland, GLib, Gtk  # noqa: E402
 
+from .i18n import N_, _  # noqa: E402
+
 log = logging.getLogger(__name__)
 
 CSS = b"""
@@ -37,6 +39,8 @@ window.vasistas-splash .splash-chip {
 }
 window.vasistas-splash.battery .splash-chip { color: @fg_color; background: alpha(@fg_color, 0.1); }
 window.vasistas-splash .splash-error { color: @error_color; opacity: 1; }
+window.vasistas-splash progressbar { margin-top: 6px; }
+window.vasistas-splash progressbar trough, window.vasistas-splash progressbar progress { min-height: 4px; }
 """
 
 DOTS = 5
@@ -46,8 +50,8 @@ SIZE = 36
 
 # pastille selon la configuration de la VM (réglée par l'application compagnon)
 MODES = {
-    "performance": "⚡ Haute performance",   # carte graphique dédiée à la VM
-    "battery": "Économie d'énergie",
+    "performance": N_("⚡ Haute performance"),   # carte graphique dédiée à la VM
+    "battery": N_("Économie d'énergie"),
 }
 
 
@@ -77,8 +81,12 @@ class Splash(Gtk.Window):
         self.stage_label.add_css_class("splash-stage")
         texts.append(self.title_label)
         texts.append(self.stage_label)
+        # avancement : estimé d'après la durée des démarrages précédents, puis par étapes
+        self.bar = Gtk.ProgressBar(fraction=0.02, visible=False)
+        texts.append(self.bar)
+        self.estimate = None   # (début, durée attendue, de, à)
         if mode in MODES:
-            chip = Gtk.Label(label=MODES[mode], xalign=0, halign=Gtk.Align.START)
+            chip = Gtk.Label(label=_(MODES[mode]), xalign=0, halign=Gtk.Align.START)
             chip.add_css_class("splash-chip")
             texts.append(chip)
         card.append(texts)
@@ -100,11 +108,34 @@ class Splash(Gtk.Window):
     def set_stage(self, text, error=False):
         self.stage_label.set_label(text)
         if error:
+            self.estimate = None
+            self.bar.set_visible(False)
             self.stage_label.add_css_class("splash-error")
             if self.tick:
                 self.dots.remove_tick_callback(self.tick)
                 self.tick = 0
             self.dots.set_visible(False)
+
+    def set_progress(self, fraction, expected_s=None, until=None):
+        """Barre à `fraction` ; avec `expected_s`, elle avance seule jusqu'à `until` au bout de
+        cette durée (démarrage de Windows), sans jamais l'atteindre tant que l'étape dure."""
+        self.bar.set_visible(True)
+        self.bar.set_fraction(max(self.bar.get_fraction(), fraction))
+        if expected_s:
+            if self.estimate is None:
+                GLib.timeout_add(200, self._advance)
+            self.estimate = (time.monotonic(), expected_s, self.bar.get_fraction(), until or 0.9)
+        else:
+            self.estimate = None
+
+    def _advance(self):
+        if self.estimate is None or self.closing:
+            return False
+        t0, total, start, end = self.estimate
+        # approche de `end` sans l'atteindre : au-delà de la durée attendue, elle ralentit
+        x = (time.monotonic() - t0) / total
+        self.bar.set_fraction(start + (end - start) * (1 - math.exp(-2.2 * x)))
+        return True
 
     def finish(self, delay_ms=0):
         """Fondu puis fermeture."""

@@ -124,7 +124,7 @@ namespace Vasistas.Agent
             var psi = new ProcessStartInfo(LaunchCtl, args)
             {
                 UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardOutput = true, RedirectStandardError = true,
+                RedirectStandardOutput = true,
             };
             using (var p = Process.Start(psi))
             {

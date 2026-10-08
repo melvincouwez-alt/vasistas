@@ -37,6 +37,8 @@ import uuid
 from http.cookiejar import CookieJar
 from pathlib import Path
 
+from .i18n import N_, _
+
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
 TIMEOUT_S = 30
 ORG_ID = "y6jn8c31"
@@ -44,7 +46,6 @@ PROFILE_ID = "606624d44113"
 INSTANCE_ID = "560dc9f3-1aa5-4a2f-b63c-9e18f8d0e175"   # constant chez Microsoft (Fido)
 PRODUCT_EDITION_ID = 3321  # repli : Windows 11 25H2 v2, ISO multi-édition x64
 REFERER = "https://www.microsoft.com/software-download/windows11"
-LINK_VALID_S = 24 * 3600
 RETRY_S = 5
 ARCH_TYPES = {0: "x86", 1: "x64", 2: "arm64"}  # DownloadType de l'API
 EVAL_PAGE = "https://www.microsoft.com/en-us/evalcenter/{page}"
@@ -53,20 +54,20 @@ FWLINK = "https://go.microsoft.com/fwlink/?linkid={id}&clcid=0x409&culture=en-us
 # Langues proposées pour Windows 11 25H2 (nom Microsoft, nom affiché), relevées le 2026-09-29.
 # get_link interroge Microsoft : une langue retirée depuis donne une DownloadError claire.
 LANGUAGES = [
-    ("German", "Allemand"), ("English", "Anglais (États-Unis)"),
-    ("English International", "Anglais international"), ("Arabic", "Arabe"),
-    ("Bulgarian", "Bulgare"), ("Chinese (Simplified)", "Chinois (simplifié)"),
-    ("Chinese (Traditional)", "Chinois (traditionnel)"), ("Korean", "Coréen"),
-    ("Croatian", "Croate"), ("Danish", "Danois"), ("Spanish", "Espagnol"),
-    ("Spanish (Mexico)", "Espagnol (Mexique)"), ("Estonian", "Estonien"), ("Finnish", "Finnois"),
-    ("French", "Français"), ("French Canadian", "Français canadien"), ("Greek", "Grec"),
-    ("Hebrew", "Hébreu"), ("Hungarian", "Hongrois"), ("Italian", "Italien"),
-    ("Japanese", "Japonais"), ("Latvian", "Letton"), ("Lithuanian", "Lituanien"),
-    ("Dutch", "Néerlandais"), ("Norwegian", "Norvégien"), ("Polish", "Polonais"),
-    ("Portuguese", "Portugais"), ("Brazilian Portuguese", "Portugais (Brésil)"),
-    ("Romanian", "Roumain"), ("Russian", "Russe"), ("Serbian Latin", "Serbe (latin)"),
-    ("Slovak", "Slovaque"), ("Slovenian", "Slovène"), ("Swedish", "Suédois"),
-    ("Czech", "Tchèque"), ("Thai", "Thaï"), ("Turkish", "Turc"), ("Ukrainian", "Ukrainien"),
+    ("German", N_("Allemand")), ("English", N_("Anglais (États-Unis)")),
+    ("English International", N_("Anglais international")), ("Arabic", N_("Arabe")),
+    ("Bulgarian", N_("Bulgare")), ("Chinese (Simplified)", N_("Chinois (simplifié)")),
+    ("Chinese (Traditional)", N_("Chinois (traditionnel)")), ("Korean", N_("Coréen")),
+    ("Croatian", N_("Croate")), ("Danish", N_("Danois")), ("Spanish", N_("Espagnol")),
+    ("Spanish (Mexico)", N_("Espagnol (Mexique)")), ("Estonian", N_("Estonien")), ("Finnish", N_("Finnois")),
+    ("French", N_("Français")), ("French Canadian", N_("Français canadien")), ("Greek", N_("Grec")),
+    ("Hebrew", N_("Hébreu")), ("Hungarian", N_("Hongrois")), ("Italian", N_("Italien")),
+    ("Japanese", N_("Japonais")), ("Latvian", N_("Letton")), ("Lithuanian", N_("Lituanien")),
+    ("Dutch", N_("Néerlandais")), ("Norwegian", N_("Norvégien")), ("Polish", N_("Polonais")),
+    ("Portuguese", N_("Portugais")), ("Brazilian Portuguese", N_("Portugais (Brésil)")),
+    ("Romanian", N_("Roumain")), ("Russian", N_("Russe")), ("Serbian Latin", N_("Serbe (latin)")),
+    ("Slovak", N_("Slovaque")), ("Slovenian", N_("Slovène")), ("Swedish", N_("Suédois")),
+    ("Czech", N_("Tchèque")), ("Thai", N_("Thaï")), ("Turkish", N_("Turc")), ("Ukrainian", N_("Ukrainien")),
 ]
 
 # langue (code ISO 639) -> langue Microsoft ; variantes régionales à part
@@ -91,14 +92,14 @@ _LATAM = {"MX", "AR", "BO", "CL", "CO", "CR", "CU", "DO", "EC", "GT", "HN", "NI"
 
 # Éditions : (clé, nom affiché, version qui l'installe)
 EDITIONS = [
-    ("pro", "Professionnel", "win11"),
-    ("home", "Famille", "win11"),
-    ("education", "Éducation", "win11"),
-    ("pro_education", "Professionnel Éducation", "win11"),
-    ("pro_workstations", "Professionnel pour les stations de travail", "win11"),
-    ("enterprise", "Entreprise (évaluation)", "win11_eval"),
-    ("enterprise_ltsc", "Entreprise LTSC 2024 (évaluation)", "ltsc_eval"),
-    ("iot_enterprise_ltsc", "IoT Entreprise LTSC 2024 (évaluation)", "iot_ltsc_eval"),
+    ("pro", N_("Professionnel"), "win11"),
+    ("home", N_("Famille"), "win11"),
+    ("education", N_("Éducation"), "win11"),
+    ("pro_education", N_("Professionnel Éducation"), "win11"),
+    ("pro_workstations", N_("Professionnel pour les stations de travail"), "win11"),
+    ("enterprise", N_("Entreprise (évaluation)"), "win11_eval"),
+    ("enterprise_ltsc", N_("Entreprise LTSC 2024 (évaluation)"), "ltsc_eval"),
+    ("iot_enterprise_ltsc", N_("IoT Entreprise LTSC 2024 (évaluation)"), "iot_ltsc_eval"),
 ]
 # éditions présentes dans l'ISO multi-édition grand public (Windows 11 et Windows 10)
 CONSUMER_EDITIONS = ["home", "pro", "education", "pro_education", "pro_workstations"]
@@ -164,54 +165,54 @@ def _names(names):
 VERSIONS = [
     {
         "key": "win11", "label": "Windows 11 (25H2)",
-        "description": "Version actuelle, toutes les éditions grand public (Famille, Professionnel, "
-                       "Éducation…). S'active avec votre licence.",
+        "description": N_("Version actuelle, toutes les éditions grand public (Famille, Professionnel, "
+                          "Éducation…). S'active avec votre licence."),
         "method": "api", "page": "windows11", "product_edition_id": 3321,
         "referer": "https://www.microsoft.com/software-download/windows11",
         "arch": ["x64"], "languages": list(LANGUAGES), "eval": False, "needs_key": True,
         "editions": CONSUMER_EDITIONS, "default": True,
-        "note": "Clé de produit à l'installation : la vôtre, ou une clé générique qui installe "
-                "sans activer (activation ensuite dans Paramètres).",
+        "note": N_("Clé de produit demandée à l'installation : votre clé, ou une clé générique qui installe Windows "
+                   "sans l'activer (activation ensuite dans les Paramètres de Windows)."),
     },
     {
-        "key": "win11_eval", "label": "Windows 11 Entreprise, évaluation 90 jours",
-        "description": "Sans clé ni licence : idéale pour essayer. Expire au bout de 90 jours.",
+        "key": "win11_eval", "label": N_("Windows 11 Entreprise, évaluation 90 jours"),
+        "description": N_("Sans clé ni licence, adaptée à un essai. Cette version expire au bout de 90 jours."),
         "method": "evalcenter", "page": "download-windows-11-enterprise", "family": "enterprise",
         "arch": ["x64"], "languages": _names(EVAL_LINKS[("enterprise", "x64")]), "eval": True,
         "needs_key": False, "editions": ["enterprise"],
-        "note": "Activation en ligne demandée après l'installation. Après 90 jours : fond noir, "
-                "rappel permanent, arrêt toutes les heures. Ne passe pas à une licence : "
-                "réinstaller avec Windows 11 (25H2) pour garder Windows.",
+        "note": N_("Activation en ligne demandée après l'installation. Après 90 jours : fond d'écran noir, rappel "
+                   "permanent et arrêt de Windows toutes les heures. Cette version ne peut pas être convertie en "
+                   "version sous licence : pour continuer à utiliser Windows, réinstallez Windows 11 (25H2)."),
     },
     {
-        "key": "ltsc_eval", "label": "Windows 11 Entreprise LTSC 2024, évaluation 90 jours",
-        "description": "Édition à support long, sans nouveautés ni Microsoft Store, plus légère. "
-                       "Sans clé ; expire au bout de 90 jours.",
+        "key": "ltsc_eval", "label": N_("Windows 11 Entreprise LTSC 2024, évaluation 90 jours"),
+        "description": N_("Édition à support long, plus légère, sans nouvelles fonctionnalités ni Microsoft Store. "
+                          "Sans clé ; cette version expire au bout de 90 jours."),
         "method": "evalcenter", "page": "download-windows-11-enterprise", "family": "ltsc",
         "arch": ["x64"], "languages": _names(EVAL_LINKS[("ltsc", "x64")]), "eval": True,
         "needs_key": False, "editions": ["enterprise_ltsc"],
-        "note": "Base 24H2 (build 26100). Sans Microsoft Store : le nouvel Outlook et les "
-                "applications du Store ne s'installent pas. Mêmes limites d'évaluation.",
+        "note": N_("Base 24H2 (build 26100). Sans Microsoft Store : le nouvel Outlook et les "
+                   "applications du Store ne s'installent pas. Mêmes limites d'évaluation."),
     },
     {
-        "key": "iot_ltsc_eval", "label": "Windows 11 IoT Entreprise LTSC 2024, évaluation 90 jours",
-        "description": "Variante LTSC pour appareils dédiés, en anglais seulement. Sans clé ; "
-                       "expire au bout de 90 jours.",
+        "key": "iot_ltsc_eval", "label": N_("Windows 11 IoT Entreprise LTSC 2024, évaluation 90 jours"),
+        "description": N_("Variante LTSC pour appareils dédiés, en anglais uniquement. Sans clé ; cette version expire "
+                          "au bout de 90 jours."),
         "method": "evalcenter", "page": "download-windows-11-iot-enterprise-ltsc-eval", "family": "iot",
         "arch": ["x64", "arm64"], "languages": _names(["English"]), "eval": True,
         "needs_key": False, "editions": ["iot_enterprise_ltsc"],
-        "note": "Anglais (États-Unis) seulement ; un module de langue s'ajoute ensuite dans "
-                "Windows. Sans Microsoft Store.",
+        "note": N_("Anglais (États-Unis) uniquement ; un module de langue peut être ajouté ensuite dans les paramètres "
+                   "de Windows. Sans Microsoft Store."),
     },
     {
         "key": "win10", "label": "Windows 10 (22H2)",
-        "description": "Ancienne version, pour les applications qui l'exigent.",
+        "description": N_("Ancienne version, pour les applications qui l'exigent."),
         "method": "api", "page": "windows10ISO", "product_edition_id": 2618,
         "referer": "https://www.microsoft.com/software-download/windows10ISO",
         "arch": ["x64", "x86"], "languages": list(LANGUAGES), "eval": False, "needs_key": True,
         "editions": CONSUMER_EDITIONS, "end_of_support": "2025-10-14",
-        "note": "Support terminé le 14 octobre 2025 : plus de mises à jour de sécurité sans le "
-                "programme payant ESU. Mêmes clés génériques que Windows 11.",
+        "note": N_("Support terminé le 14 octobre 2025 : plus de mises à jour de sécurité sans le "
+                   "programme payant ESU. Mêmes clés génériques que Windows 11."),
     },
 ]
 DEFAULT_VERSION = "win11"
@@ -257,11 +258,11 @@ def install_key(version_key, edition="pro", user_key=None):
     if user_key:
         key = normalize_key(user_key)
         if key is None:
-            raise ValueError("clé de produit mal formée (25 caractères, XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)")
+            raise ValueError(_("format de clé de produit incorrect (25 caractères, XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)"))
         return key
     edition = "pro" if edition == "enterprise" else edition
     if edition not in v["editions"]:
-        raise ValueError(f"l'édition {edition} n'est pas dans {v['label']}")
+        raise ValueError(_("l'édition {edition} n'est pas dans {version}", edition=edition, version=_(v["label"])))
     return GENERIC_KEYS[edition]
 
 
@@ -314,10 +315,6 @@ def buy_url(edition="pro", loc=None):
     """Achat d'une licence Windows 11 au Microsoft Store (Pro ou Famille)."""
     product = _STORE_PRODUCTS.get(edition, _STORE_PRODUCTS["pro"])
     return f"https://www.microsoft.com/{web_locale(loc)}/d/{product}"
-
-
-OFFICIAL_PAGE = official_page()
-BUY_URL = buy_url()
 
 
 def languages(version_key=DEFAULT_VERSION):
@@ -378,7 +375,7 @@ class _Session:
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read()
         except (urllib.error.URLError, OSError) as e:
-            raise DownloadError(f"Microsoft ne répond pas : {getattr(e, 'reason', e)}") from e
+            raise DownloadError(_("Microsoft ne répond pas : {reason}", reason=getattr(e, "reason", e))) from e
 
     def resolve(self, url):
         """(adresse finale après redirections, code HTTP, en-têtes) par une requête HEAD."""
@@ -389,7 +386,7 @@ class _Session:
         except urllib.error.HTTPError as e:
             return url, e.code, e.headers
         except (urllib.error.URLError, OSError) as e:
-            raise DownloadError(f"Microsoft ne répond pas : {getattr(e, 'reason', e)}") from e
+            raise DownloadError(_("Microsoft ne répond pas : {reason}", reason=getattr(e, "reason", e))) from e
 
 
 _session_factory = _Session  # remplacé dans les tests
@@ -399,7 +396,7 @@ def _json(body, what):
     try:
         return json.loads(body)
     except ValueError as e:
-        raise DownloadError(f"réponse illisible de Microsoft ({what})") from e
+        raise DownloadError(_("réponse illisible de Microsoft ({what})", what=what)) from e
 
 
 def _blocked_message(page_html):
@@ -411,10 +408,10 @@ def _blocked_message(page_html):
         text = re.sub(r"<[^>]+>", "", m.group(1).replace("&lt;", "<").replace("&gt;", ">"))
         text = re.sub(r"\s+", " ", text).strip()
     if "715-123130" not in text:
-        text = ("Microsoft refuse le téléchargement depuis cette adresse (code 715-123130) : "
-                "trop de demandes, VPN ou pays sous sanctions")
-    return (text.rstrip(". ") + ". Réessayer dans une heure, ou télécharger l'image depuis la page "
-            "officielle dans le navigateur, ou choisir une version d'évaluation.")
+        text = _("Microsoft refuse le téléchargement depuis cette adresse (code 715-123130) : "
+                 "trop de demandes, VPN ou pays sous sanctions")
+    return _("{reason}. Réessayez dans une heure, téléchargez l'image depuis la page officielle de Microsoft dans le "
+             "navigateur, ou choisissez une version d'évaluation.", reason=text.rstrip(". "))
 
 
 def _is_sentinel(error):
@@ -443,19 +440,19 @@ class _ApiSession:
         self.v, self.loc = v, loc
         self.s = _session_factory()
         page_url = f"https://www.microsoft.com/{web_locale(loc)}/software-download/{v['page']}"
-        status, _, body = self.s.request(page_url)
+        status, _h, body = self.s.request(page_url)
         self.page = body.decode("utf-8", "replace") if status == 200 else ""
         self.edition = _edition_id(self.page, v["product_edition_id"])
         # session déclarée à Microsoft (sans quoi l'API refuse de répondre)
         self.sid = sid = str(uuid.uuid4())
         self.s.request(f"https://vlscppe.microsoft.com/tags?org_id={ORG_ID}&session_id={sid}")
-        _, _, js = self.s.request(f"https://ov-df.microsoft.com/mdt.js?instanceId={INSTANCE_ID}"
+        _s, _h, js = self.s.request(f"https://ov-df.microsoft.com/mdt.js?instanceId={INSTANCE_ID}"
                                   f"&PageId=si&session_id={sid}")
         js = js.decode("utf-8", "replace")
         w = re.search(r"[?&]w=([A-F0-9]+)", js)
         rticks = re.search(r'rticks\="\+?(\d+)', js)
         if not w or not rticks:
-            raise DownloadError("protection du site de Microsoft : réponse inattendue (ov-df)")
+            raise DownloadError(_("protection du site de Microsoft : réponse inattendue (ov-df)"))
         self.s.request(f"https://ov-df.microsoft.com/?session_id={sid}&CustomerId={INSTANCE_ID}"
                        f"&PageId=si&w={w.group(1)}&mdt={int(time.time() * 1000)}&rticks={rticks.group(1)}")
 
@@ -468,28 +465,28 @@ class _ApiSession:
         for attempt in range(3):  # parfois vide au premier essai (Fido fait de même)
             if attempt:
                 time.sleep(2)
-            status, _, body = self.s.request(self.API + "getskuinformationbyproductedition?" + q)
-            data = _json(body, "langues") if status == 200 else {}
+            status, _h, body = self.s.request(self.API + "getskuinformationbyproductedition?" + q)
+            data = _json(body, _("langues")) if status == 200 else {}
             if data.get("Skus") and not data.get("Errors"):
                 return data["Skus"]
             if _is_sentinel((data.get("Errors") or [{}])[0]):
                 raise DownloadBlocked(_blocked_message(self.page))
-        raise DownloadError("Microsoft ne donne pas la liste des langues")
+        raise DownloadError(_("Microsoft ne fournit pas la liste des langues"))
 
     def link(self, sku_id, arch):
         q = self._query(productEditionId="undefined", SKU=sku_id)
-        _, _, body = self.s.request(self.API + "GetProductDownloadLinksBySku?" + q,
+        _s, _h, body = self.s.request(self.API + "GetProductDownloadLinksBySku?" + q,
                                     {"Referer": self.v["referer"]})
-        data = _json(body, "liens")
+        data = _json(body, _("liens"))
         errors = data.get("Errors") or []
         if errors:
             if _is_sentinel(errors[0]):
                 raise DownloadBlocked(_blocked_message(self.page))
-            raise DownloadError(f"Microsoft : {errors[0].get('Value') or 'erreur inconnue'}")
+            raise DownloadError(_("Microsoft : {error}", error=errors[0].get("Value") or _("erreur inconnue")))
         url = next((o.get("Uri") for o in data.get("ProductDownloadOptions") or []
                     if ARCH_TYPES.get(o.get("DownloadType")) == arch), None)
         if not url:
-            raise DownloadError(f"pas d'image {arch} dans la réponse de Microsoft")
+            raise DownloadError(_("aucune image {arch} dans la réponse de Microsoft", arch=arch))
         return url
 
 
@@ -514,10 +511,10 @@ def _parse_eval_page(page_html):
 
 def _refresh_eval(v):
     s = _session_factory()
-    status, _, body = s.request(EVAL_PAGE.format(page=v["page"]))
+    status, _h, body = s.request(EVAL_PAGE.format(page=v["page"]))
     found = _parse_eval_page(body.decode("utf-8", "replace") if status == 200 else "")
     if not found:
-        raise DownloadError("page de l'Evaluation Center illisible")
+        raise DownloadError(_("page de l'Evaluation Center illisible"))
     EVAL_LINKS.update(found)
     return found
 
@@ -535,7 +532,8 @@ def _eval_link(v, language, arch):
                     int(size) if size else None
         if attempt == 0:
             _refresh_eval(v)  # liens changés depuis le relevé : relire la page
-    raise DownloadError(f"pas d'image {arch} en « {language} » pour {v['label']}")
+    raise DownloadError(_("aucune image {arch} en « {language} » pour {version}", arch=arch, language=language,
+                          version=_(v["label"])))
 
 
 # -- langues et liens --
@@ -568,7 +566,8 @@ def get_link(language=None, version=DEFAULT_VERSION, arch="x64", loc=None):
     Lève DownloadBlocked si Microsoft refuse cette adresse, DownloadError sinon."""
     v = get_version(version)
     if arch not in v["arch"]:
-        raise DownloadError(f"{v['label']} n'existe pas en {arch} ({', '.join(v['arch'])})")
+        raise DownloadError(_("{version} n'existe pas en {arch} ({archs})", version=_(v["label"]), arch=arch,
+                              archs=", ".join(v["arch"])))
     language = language or default_language(v["key"], loc)
     if v["method"] == "evalcenter":
         return _eval_link(v, language, arch)
@@ -576,7 +575,8 @@ def get_link(language=None, version=DEFAULT_VERSION, arch="x64", loc=None):
         session = _ApiSession(v, loc)
         sku = next((k for k in session.skus() if k.get("Language") == language), None)
         if sku is None:
-            raise DownloadError(f"langue « {language} » non proposée par Microsoft pour {v['label']}")
+            raise DownloadError(_("langue « {language} » non proposée par Microsoft pour {version}",
+                                   language=language, version=_(v["label"])))
         try:
             url = session.link(sku["Id"], arch)
             break
@@ -587,7 +587,7 @@ def get_link(language=None, version=DEFAULT_VERSION, arch="x64", loc=None):
     filename = urllib.parse.unquote(Path(urllib.parse.urlsplit(url).path).name) or "Windows.iso"
     size = None
     try:
-        status, headers, _ = session.s.request(url, method="HEAD")
+        status, headers, _b = session.s.request(url, method="HEAD")
         if status == 200 and headers.get("Content-Length"):
             size = int(headers["Content-Length"])
     except (DownloadError, ValueError):
@@ -630,7 +630,7 @@ def download(url, dest, progress=None, cancel=None, expected_size=None, chunk=1 
             with open(part, "ab" if offset else "wb") as f:
                 while True:
                     if cancel is not None and cancel.is_set():
-                        raise DownloadCancelled("téléchargement interrompu")
+                        raise DownloadCancelled(_("téléchargement interrompu"))
                     block = r.read(chunk)
                     if not block:
                         break
@@ -643,13 +643,17 @@ def download(url, dest, progress=None, cancel=None, expected_size=None, chunk=1 
             part.replace(dest)
             return dest
         if e.code in (403, 410):
-            raise DownloadError("lien expiré (valable 24 h) : en demander un nouveau") from e
-        raise DownloadError(f"téléchargement refusé (HTTP {e.code})") from e
+            raise DownloadError(_("lien de téléchargement expiré (valable 24 h) : relancez le téléchargement pour "
+                                  "obtenir un nouveau lien")) from e
+        raise DownloadError(_("téléchargement refusé (HTTP {code})", code=e.code)) from e
     except (urllib.error.URLError, OSError) as e:
-        raise DownloadError(f"téléchargement interrompu : {getattr(e, 'reason', e)} "
-                            "(il reprendra où il s'est arrêté)") from e
+        raise DownloadError(_("téléchargement interrompu : {reason} (le téléchargement reprendra là où il s'est arrêté "
+                              "au prochain lancement)",
+                              reason=getattr(e, "reason", e))) from e
     size = part.stat().st_size
     if total is not None and size != total:
-        raise DownloadError(f"fichier incomplet ({size} octets sur {total}) : relancer pour reprendre")
+        raise DownloadError(_("fichier incomplet ({size} octets sur {total}) : relancez le téléchargement pour le "
+                              "reprendre",
+                              size=size, total=total))
     part.replace(dest)
     return dest

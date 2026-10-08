@@ -20,9 +20,10 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Granite", "7.0")
 from gi.repository import Granite, Gtk  # noqa: E402
 
-from .companion_common import Page, dim, row  # noqa: E402
+from .companion_common import Section, dim, plain_card, row  # noqa: E402
+from .i18n import N_, _  # noqa: E402
 
-CHOICES = [("vm", "Windows (Vasistas)"), ("web", "En ligne")]
+CHOICES = [("vm", N_("Windows (Vasistas)")), ("web", N_("En ligne"))]
 
 
 def _lucarne():
@@ -63,40 +64,46 @@ def extension_state(ext_id):
     return False, None
 
 
-class BrowserPage(Page):
+class BrowserPage(Section):
     __gtype_name__ = "VasistasBrowserPage"
 
     def __init__(self, win):
-        super().__init__("web-browser", "Navigateur",
-                         "Documents Word, Excel et PowerPoint cliqués dans Chrome : ouverts dans Office "
-                         "de Windows ou en ligne.")
+        super().__init__("web-browser", _("Navigateur"),
+                         _("Choix de l'application qui ouvre les documents Word, Excel et PowerPoint cliqués dans "
+                           "Chrome : Office de Windows ou Office en ligne."))
         self.win = win
         status = lucarne("status") or {}
         ext = status.get("extension", {})
         self.ext_id = ext.get("id")
         self.links_log = Path(status.get("linksLog", Path.home() / ".cache/lucarne/links.log"))
-        box = self.box
+        box = self.box = plain_card()  # premier bloc, avant les titres : sa propre carte
+        self.column.append(box)
+        self.first_card(box)
 
         loaded, version = extension_state(self.ext_id)
         want = ext.get("version")
         state = Gtk.Label(xalign=0, wrap=True, hexpand=True)
         if not loaded:
-            state.set_label("Extension « Lucarne » pas encore chargée dans Chrome.")
+            state.set_label(_("L'extension « Lucarne » n'est pas encore chargée dans Chrome."))
         elif version and version != want:
-            state.set_label(f"Extension chargée en version {version} : rechargez-la pour passer à la {want}.")
+            state.set_label(_("Extension chargée en version {version} : rechargez l'extension pour passer à la version "
+                              "{want}.",
+                               version=version, want=want))
         else:
-            state.set_label(f"Extension chargée. Après une mise à jour (version actuelle {want}), "
-                            "cliquez sur ⟳ dans la page des extensions.")
-        btn = Gtk.Button(label="Ouvrir les extensions de Chrome", valign=Gtk.Align.CENTER)
+            state.set_label(_("Extension chargée. Après une mise à jour (version actuelle {want}), "
+                              "cliquez sur ⟳ dans la page des extensions.", want=want))
+        btn = Gtk.Button(label=_("Ouvrir les extensions de Chrome"), valign=Gtk.Align.CENTER)
         btn.connect("clicked", lambda *_: self.open_extensions())
         top = Gtk.Box(spacing=12)
         top.append(state)
         top.append(btn)
         box.append(top)
-        box.append(dim(f"Première fois : mode développeur, « Charger l'extension non empaquetée », dossier "
-                       f"{ext.get('path')}. Après une mise à jour : bouton ⟳ de l'extension."))
+        box.append(dim(_("Première installation : activez le mode développeur, cliquez sur « Charger l'extension non "
+                         "empaquetée » et sélectionnez le dossier {path}. Après une mise à jour : cliquez sur le "
+                         "bouton ⟳ de l'extension.", path=ext.get("path"))))
 
-        box.append(Granite.HeaderLabel.new("Ouvrir les documents dans"))
+        self.header(_("Ouvrir les documents dans"))
+        box = self.box
         lb = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         lb.add_css_class("rich-list")
         lb.add_css_class("card")
@@ -105,26 +112,27 @@ class BrowserPage(Page):
         for app in status.get("vmApps", {}):
             name = status.get("apps", {}).get(app, app)
             keys = [k for k, _ in CHOICES]
-            drop = Gtk.DropDown.new_from_strings([t for _, t in CHOICES])
+            drop = Gtk.DropDown.new_from_strings([_(t) for _k, t in CHOICES])
             cur = config.get(app, {}).get("target", "web")
             drop.set_selected(keys.index(cur) if cur in keys else 1)
 
             def on(d, _p, app=app, keys=keys):
                 if lucarne("config", "set", app, "target", keys[d.get_selected()]) is None:
-                    self.win.notify("Lucarne n'a pas pu enregistrer le réglage")
+                    self.win.notify(_("Lucarne n'a pas pu enregistrer le réglage"))
                 else:
-                    self.win.notify("Réglage enregistré, l'extension le reçoit tout de suite")
+                    self.win.notify(_("Réglage enregistré et transmis immédiatement à l'extension"))
             drop.connect("notify::selected", on)
-            sub = "Outlook de bureau s'ouvre sans le message cliqué" if app == "outlook" else ""
+            sub = _("Outlook de bureau s'ouvre sans le message cliqué") if app == "outlook" else ""
             r = row(name, sub, drop)
             r.set_margin_start(6)
             r.set_margin_end(6)
             lb.append(r)
         box.append(lb)
-        box.append(dim("Office de Windows reçoit l'adresse du fichier lui-même : l'extension la retrouve "
-                       "avec votre session SharePoint dans Chrome."))
+        box.append(dim(_("Office de Windows reçoit l'adresse du fichier lui-même : l'extension retrouve cette adresse "
+                         "grâce à votre session SharePoint dans Chrome.")))
 
-        box.append(Granite.HeaderLabel.new("Derniers liens"))
+        self.header(_("Derniers liens"))
+        box = self.box
         self.log = Gtk.Label(xalign=0, wrap=True, selectable=True)
         self.log.add_css_class(Granite.STYLE_CLASS_SMALL_LABEL)
         box.append(self.log)
@@ -139,9 +147,9 @@ class BrowserPage(Page):
         for ln in reversed(lines):
             parts = ln.split(" | ")
             if len(parts) >= 5:
-                ok = "ouvert en fichier" if parts[4] not in ("None", "") else "adresse du fichier introuvable"
-                out.append(f"{parts[0][:19]}  {parts[1]} : {ok}")
-        self.log.set_label("\n".join(out) or "Aucun lien pour l'instant.")
+                ok = _("ouvert en fichier") if parts[4] not in ("None", "") else _("adresse du fichier introuvable")
+                out.append(_("{when}  {app} : {result}", when=parts[0][:19], app=parts[1], result=ok))
+        self.log.set_label("\n".join(out) or _("Aucun lien ouvert pour l'instant."))
 
     def open_extensions(self):
         subprocess.Popen(["google-chrome", "chrome://extensions/?id=" + (self.ext_id or "")], start_new_session=True,

@@ -19,7 +19,6 @@ import mmap
 import os
 import socket
 import struct
-import time
 
 from gi.repository import Gio, GLib
 
@@ -110,9 +109,6 @@ LISTENER_XML = """
 </node>
 """
 
-PIXMAN_X8R8G8B8 = 0x20020888
-PIXMAN_A8R8G8B8 = 0x20028888
-
 
 class Screen:
     """Copie de l'écran de la VM (BGRX, `stride` octets par ligne) et zones modifiées.
@@ -129,8 +125,6 @@ class Screen:
         self.console = None
         self.listener = None
         self._keep = []
-        self.updates = 0
-        self.copy_ms = 0.0
 
     # -- connexion --
 
@@ -157,7 +151,11 @@ class Screen:
         try:
             qmp.send_fd("vasistas-display", theirs.fileno())
             qmp.cmd("add_client", protocol="@dbus-display", fdname="vasistas-display")
-        except (OSError, EOFError, RuntimeError) as e:
+        except (OSError, EOFError):
+            # connexion QMP périmée (VM relancée) : le fil QMP réessaie sur une connexion neuve
+            ours.close()
+            raise
+        except RuntimeError as e:
             log.warning("affichage D-Bus indisponible : %s", e)
             ours.close()
             return None
@@ -273,14 +271,13 @@ class Screen:
         self._unmap()
         self.fb = bytearray(data)
         self._set_size(w, h, stride)
-        self._damage(0, 0, w, h)
+        self.on_damage(0, 0, w, h)
 
     def _m_Update(self, params, inv):
         x, y, w, h, stride, fmt = self._args(params, 6)
         data = self._bytes(params, 6)
         if self.fb is None or self.mapped is not None:
             return
-        t0 = time.perf_counter()
         row = w * 4
         dst = self.stride
         mv = memoryview(data)
@@ -288,8 +285,7 @@ class Screen:
         for r in range(h):
             self.fb[off:off + row] = mv[r * stride:r * stride + row]
             off += dst
-        self.copy_ms += (time.perf_counter() - t0) * 1000
-        self._damage(x, y, w, h)
+        self.on_damage(x, y, w, h)
 
     def _m_ScanoutMap(self, params, inv):
         _, offset, w, h, stride, fmt = params.unpack()
@@ -302,11 +298,11 @@ class Screen:
         os.close(fd)
         self.fb = memoryview(self.mapped)[offset:offset + stride * h]
         self._set_size(w, h, stride)
-        self._damage(0, 0, w, h)
+        self.on_damage(0, 0, w, h)
 
     def _m_UpdateMap(self, params, inv):
         x, y, w, h = params.unpack()
-        self._damage(x, y, w, h)
+        self.on_damage(x, y, w, h)
 
     def _m_Disable(self, params, inv):
         self._unmap()
@@ -324,31 +320,6 @@ class Screen:
                 fb.release()
             self.mapped.close()
             self.mapped = None
-
-    def _damage(self, x, y, w, h):
-        self.updates += 1
-        self.on_damage(x, y, w, h)
-
-    # -- lecture --
-
-    def crop(self, x, y, w, h):
-        """Pixels BGRX d'un rectangle de l'écran, ou None si hors écran."""
-        if self.fb is None:
-            return None
-        x0, y0 = max(0, x), max(0, y)
-        x1, y1 = min(self.width, x + w), min(self.height, y + h)
-        if x1 - x0 != w or y1 - y0 != h:
-            return None
-        if w * 4 == self.stride:
-            return bytes(self.fb[y * self.stride:(y + h) * self.stride])
-        out = bytearray(w * h * 4)
-        row = w * 4
-        fb, stride = self.fb, self.stride
-        off = y * stride + x * 4
-        for r in range(h):
-            out[r * row:(r + 1) * row] = fb[off:off + row]
-            off += stride
-        return bytes(out)
 
 
 def main():

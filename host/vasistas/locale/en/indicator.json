@@ -1,0 +1,20 @@
+{
+  "Windows est arrêté": "Windows is stopped",
+  "Windows démarre…": "Windows is starting…",
+  "Windows s'arrête…": "Windows is shutting down…",
+  "Windows est en veille": "Windows is asleep",
+  "Windows est prêt": "Windows is ready",
+  "Windows est prêt · 1 fenêtre": "Windows is ready · 1 window",
+  "Windows est prêt · {n} fenêtres": "Windows is ready · {n} windows",
+  "Démarrer Windows": "Start Windows",
+  "Mettre Windows en veille": "Put Windows to sleep",
+  "Réveiller Windows": "Wake Windows",
+  "Arrêter Windows": "Shut down Windows",
+  "Réinitialiser les affichages": "Reset displays",
+  "Puissance de Windows": "Windows power",
+  "S'applique au prochain démarrage de Windows": "Applies the next time Windows starts",
+  "Ouvrir Vasistas": "Open Vasistas",
+  "Quitter l'indicateur": "Quit indicator",
+  "Indicateur dans le panneau": "Panel indicator",
+  "Affiche en haut de l'écran l'état de Windows, les applications récentes et les commandes de Windows.": "Shows the Windows status, recent apps and Windows commands at the top of the screen."
+}
