@@ -1,13 +1,17 @@
 # Performances d'affichage sans GPU dédié
 
-Plan d'optimisation du 2026-10-06. Matériel de référence : portable avec iGPU
+Étude technique menée du 28 septembre au 6 octobre 2026, gardée comme référence : elle
+explique les choix de la version 0.9 (capture des fenêtres recouvertes, compression zstd,
+rendu Vulkan). Les parties 1 à 4 décrivent l'état avant ces changements ; les parties 5 et 6
+disent ce qui a été fait. Matériel de référence : portable avec iGPU
 AMD Radeon 890M seule (sans carte dédiée), elementary OS 9, Gala en session Wayland, GTK 4.22.4,
 QEMU 11.1.1 (patch `patches/qemu-11.1.1-pixman-udmabuf.patch`), Windows 11 avec le pilote
 d'affichage « Red Hat VirtIO GPU DOD » 100.103.104.30200 en 3440x1800.
 
-Les chiffres viennent du code, de `docs/perf.jsonl`, des lignes « invité : stats » de
-`host.log`, des bancs de septembre (dwmrate.ps1, cadence.ps1, `vasistas bench`) et de mesures
-faites aujourd'hui sans déranger la VM. Rien n'a été modifié dans le code pour ce document.
+Les chiffres viennent du code, du journal de mesures `docs/perf.jsonl`, des lignes
+« invité : stats » de `host.log`, des bancs de septembre (scripts dwmrate.ps1 et cadence.ps1,
+`vasistas bench`) et de mesures faites le 6 octobre. Le journal de mesures et ces deux scripts
+ne sont pas publiés dans le dépôt ; `vasistas bench` écrit son propre `docs/perf.jsonl`.
 
 ## 1. État des lieux
 
@@ -143,7 +147,7 @@ https://sageinfinity.github.io/docs/FAQ/dxgiwgc ,
 https://learn.microsoft.com/en-us/windows/win32/dwm/dwmdxgetwindowsharedsurface .
 
 GTK a pris l'échelle fractionnaire Wayland en 4.11.1 (5 avril 2023), le rendu Vulkan par défaut
-en 4.16 (2024, Vasistas force GL), et 4.24 (2026) retravaille l'horloge d'images pour
+en 4.16 (2024 ; Vasistas forçait GL à l'époque de l'étude), et 4.24 (2026) retravaille l'horloge d'images pour
 présenter à l'heure. Nous sommes en 4.22.4 : `GdkDmabufTextureBuilder` et
 `GdkFrameTimings` (heure de présentation prédite et réelle) sont là, l'horloge retravaillée
 pas encore. Gala expose `zwp_linux_dmabuf_v1` version 5, `wp_presentation` 2,

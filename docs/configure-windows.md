@@ -9,9 +9,9 @@ ce qui est déjà en place n'est pas touché, et il ne redémarre jamais Windows
 Depuis l'hôte, Windows démarré et l'agent en marche :
 
 ```
-cd host
-python3 -m vasistas exec @../install/configure-windows.ps1                 # applique
-python3 -m vasistas exec "$(printf '$Check = $true\n'; cat ../install/configure-windows.ps1)"   # contrôle seul
+script=~/.local/opt/vasistas/current/install/configure-windows.ps1
+vasistas exec "@$script"                                            # applique
+vasistas exec "$(printf '$Check = $true\n'; cat "$script")"        # contrôle seul
 ```
 
 `vasistas exec` envoie le texte du script : les paramètres se posent en variables avant lui
@@ -60,7 +60,8 @@ lire. Le code de sortie vaut 1 si une étape a échoué, 2 pour un paramètre in
    pas d'écran de verrouillage, invite UAC sur le bureau courant, pas de redémarrage
    automatique des mises à jour pendant une session.
 7. Réglages de la session (ceux de `boot.ps1`) : animations et transparence coupées, fond noir,
-   notifications coupées, Office sans accélération matérielle, barre des tâches masquée. Si la
+   bannières de notification coupées (l'agent les rétablit pour les relayer au bureau si
+   l'option est active), Office sans accélération matérielle, barre des tâches masquée. Si la
    session du compte n'est pas ouverte, `boot.ps1` les appliquera à la prochaine ouverture. Le
    fond d'écran et la barre des tâches changent à la prochaine ouverture de session :
    l'Explorateur n'est pas relancé.

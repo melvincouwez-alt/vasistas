@@ -1,6 +1,6 @@
 # Le pilote d'écran maison de Vasistas
 
-Cette notice explique ce que fait le pilote d'écran que Vasistas pose dans Windows, pourquoi il existe, comment le régler et comment revenir en arrière.
+Cette notice explique ce que fait le pilote d'écran modifié que l'on peut installer dans Windows pour Vasistas, pourquoi il existe, comment le régler et comment revenir en arrière. Ce pilote est expérimental : Vasistas ne l'installe pas automatiquement et ne le fournit pas compilé.
 
 ## Le problème de départ
 
@@ -32,24 +32,24 @@ Le mode est un nombre rangé dans la clé du service du pilote, `HKLM\SYSTEM\Cur
 | 3 | idem, plus la minuterie, sans signal envoyé à Windows | diagnostic |
 | 7 | tout : le vrai vsync à 60 Hz | réglage normal |
 
-Le pilote ne lit cette valeur qu'à son chargement : un changement prend effet au **prochain démarrage de Windows**. La page Performances de Vasistas affiche alors un bouton « Redémarrer Windows ».
+Le pilote ne lit cette valeur qu'à son chargement : un changement prend effet au **prochain démarrage de Windows**. La page Affichage de l'application Vasistas affiche alors un bandeau avec un bouton « Redémarrer Windows ».
 
 Une seconde valeur, `VasistasVsyncOnce`, sert aux essais : elle est lue puis effacée au chargement. Si un essai fait planter Windows, il ne se répète pas au démarrage suivant.
 
 ## Où le régler dans Vasistas
 
-Page **Performances** de l'application compagnon :
+Page **Affichage** de l'application Vasistas :
 
-- **De base** : le curseur « Fluidité ou autonomie ». Autonomie coupe la synchronisation (mode 0), les trois autres crans la mettent en mode 7.
-- **Avancé**, section Affichage : « Synchronisation verticale » choisit l'un des quatre modes.
+- le curseur « Performance d'affichage » : Optimisé coupe la synchronisation (mode 0), Équilibré et Fluide la mettent en mode 7 ;
+- **Options avancées**, en bas de la page, section Images : « Synchronisation verticale » choisit l'un des quatre modes.
 
-Vasistas écrit le mode dans Windows à chaque démarrage et quand le réglage change. Si le pilote maison n'est pas posé, il ne touche à rien et le réglage est grisé.
+Vasistas écrit le mode dans Windows à chaque démarrage et quand le réglage change. Si le pilote n'est pas installé, Vasistas ne modifie rien dans Windows et le réglage reste sans effet. La section Expérimental des Préférences indique si le pilote est installé.
 
-Les autres réglages de la section Affichage vont avec le pilote :
+D'autres réglages de la page Affichage vont avec le pilote :
 
-- **Minuterie précise (1 ms)** : l'agent demande à Windows une minuterie à 1 ms. Les applications se réveillent plus souvent et livrent leurs images plus régulièrement. Avec le pilote maison, les deux gains s'ajoutent.
-- **Fenêtres recouvertes** : délai entre deux captures d'une fenêtre cachée derrière une autre.
-- **Rendu des fenêtres sous Linux** : Vulkan ou OpenGL pour dessiner les fenêtres côté Linux.
+- **Minuterie précise (1 ms)** (Options avancées, section Images) : l'agent demande à Windows une minuterie à 1 ms. Les applications se réveillent plus souvent et livrent leurs images plus régulièrement. Avec le pilote modifié, les deux gains s'ajoutent.
+- **Fenêtres recouvertes** (même section) : délai entre deux captures d'une fenêtre cachée derrière une autre.
+- **Moteur de rendu** (carte « Veille et options ») : Vulkan ou OpenGL pour dessiner les fenêtres côté Linux.
 
 ## Ce que ça change, en chiffres
 
@@ -80,13 +80,13 @@ Ce mode de signature de test affaiblit un peu la protection de Windows contre le
 
 Trois niveaux, du plus léger au plus complet :
 
-1. **Couper le vsync** : mode 0 dans la page Performances, puis redémarrer Windows. Le pilote maison reste chargé mais se comporte comme l'original.
+1. **Couper le vsync** : mode 0 dans la page Affichage (Options avancées), puis redémarrer Windows. Le pilote maison reste chargé mais se comporte comme l'original.
 2. **Remettre le pilote d'origine** : lancer `install.ps1` avec `$Restore = $true`. Le service repointe vers le fichier d'origine au prochain démarrage.
 3. **Point de restauration** : créer un point avant la pose (onglet Restauration ou `vasistas restore create avant-pilote`), puis y revenir en cas de problème.
 
 ## Dépannage
 
 - **Écran noir ou « aucun écran » dans Windows** : le pilote annonce des fonctions sans les modes à 60 Hz, ou l'inverse. Revenir au mode 0 avec `VasistasVsyncOnce`, ou restaurer.
-- **Code 43 sur la carte graphique** : le pilote déclare le signal sans répondre à la position de balayage. Ça arrive seulement avec un pilote recompilé à la main.
+- **Code 43 sur la carte graphique** : le pilote déclare le signal sans répondre à la position de balayage. Cela n'arrive qu'avec un pilote compilé sans le correctif complet.
 - **Écran bleu** : QEMU arrête la VM. Pour garder l'état et l'examiner, passer `set-action panic=pause` par QMP.
-- **Le lissage des polices est repassé en niveaux de gris** après la pose : Windows remet ce réglage quand le pilote d'écran change. Page Écrans, « Lissage des polices » sur ClearType : Vasistas l'impose ensuite à chaque démarrage.
+- **Le lissage des polices est repassé en niveaux de gris** après la pose : Windows remet ce réglage quand le pilote d'écran change. Page Windows, section Intégration au bureau, « Lissage des polices » sur ClearType : Vasistas l'impose ensuite à chaque démarrage.

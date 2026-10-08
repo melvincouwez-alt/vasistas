@@ -7,7 +7,7 @@ reproduits plus bas dans leur langue d'origine (l'anglais), qui seule fait foi.
 | Composant | Emplacement | Licence |
 |---|---|---|
 | [zstd](https://github.com/facebook/zstd) 1.5.7, version Windows officielle (`libzstd.dll`) | `guest/Vasistas.Agent/native/libzstd.dll.gz`, intégré à `Vasistas.Agent.exe` | BSD 3 clauses |
-| [Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) 10.19041.0 | types d'interopérabilité intégrés à `Vasistas.Agent.exe` | MIT |
+| [Interop.UIAutomationClient](https://github.com/FlaUI/UIAutomation-Interop) 10.19041.0 | types d'interopérabilité intégrés à `Vasistas.Agent.exe` | MIT |
 | [pycdlib](https://github.com/clalancette/pycdlib) 1.21.0 | `host/vendor`, sans modification | LGPL 2.1 (`host/vendor/pycdlib-1.21.0.dist-info/licenses/COPYING`) |
 | Correctif de [QEMU](https://www.qemu.org) | `patches/qemu-11.1.1-pixman-udmabuf.patch` | GPL 2.0 ou ultérieure, comme QEMU |
 | Correctif de viogpudo, tiré de [virtio-win](https://github.com/virtio-win/kvm-guest-drivers-windows) | `guest/viogpudo/vsync.patch` | BSD 3 clauses, comme virtio-win |

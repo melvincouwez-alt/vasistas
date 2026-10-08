@@ -6,7 +6,9 @@
 - **Image** : QEMU tourne avec `-display dbus,p2p=yes`. L'hôte s'inscrit comme écouteur
   de l'écran (`host/vasistas/display.py`) et reçoit, en mémoire partagée, les zones
   modifiées. Une seule texture GTK pour l'écran entier ; chaque fenêtre en affiche sa
-  portion. Les fenêtres recouvertes dans Windows sont capturées par l'agent (PrintWindow).
+  portion. Les fenêtres recouvertes dans Windows sont capturées par l'agent
+  (Windows.Graphics.Capture, repli PrintWindow) ; seules les tuiles modifiées sont envoyées,
+  compressées en zstd (deflate si l'hôte ou la DLL ne le permettent pas).
 - **Agent** (`guest/Vasistas.Agent`, C# .NET Framework 4.8) : suit les fenêtres, transmet
   souris et clavier (SendInput), le survol (WM_NCHITTEST, forme du pointeur), le
   presse-papiers, les icônes des applications, l'échelle et la résolution de l'écran
@@ -48,8 +50,6 @@
 - **Gala** mémorise taille et place de chaque fenêtre par application (WindowStateSaver)
   et les réimpose à l'ouverture : pendant 1,5 s après l'affichage, l'hôte redemande la
   taille de Windows au lieu de la lui transmettre.
-
-
 - **Lecteurs partagés** : brancher un dossier à chaud fait réinitialiser par Windows les
   autres périphériques virtio-fs. L'agent (`ShareGuard.cs`) vérifie les lecteurs toutes les
   30 s et avant d'ouvrir un fichier, et remonte ceux qui ne répondent plus.
@@ -62,8 +62,9 @@
   commandes de la VM partagées avec le compagnon dans `winctl.py`. Option `indicator` de
   config.json, lanceur de session posé par `vasistas desktop`.
 - **Puissance** (`power.py`, branché par `SleepManager`) : profil automatique (`resources_auto`) :
-  batterie ou mode Économie de power-profiles-daemon -> « battery », secteur -> profil choisi,
-  « performance » tant qu'une application de `heavy_apps` est ouverte. Cœurs et mémoire de QEMU
+  batterie ou mode Économie de power-profiles-daemon -> « battery », secteur -> profil choisi.
+  Une application de `app_modes` impose son mode d'affichage tant qu'elle est au premier plan
+  (réglages à chaud seulement). Cœurs et mémoire de QEMU
   au démarrage seulement ; à chaud : plafond du ballon, affinité des fils de QEMU (cœurs les plus
   sobres d'après ACPI CPPC sur batterie), cadence de capture de l'agent (message `capture`).
   Arrêt automatique sans fenêtre ouverte (`auto_shutdown_min`) et démarrage en veille
@@ -90,8 +91,8 @@
   disk.qcow2 nommés `vas-a-…` (automatiques) ou `vas-m-…` (manuels), motif et nom dans
   restore.json. VM en marche : l'agent vide le cache disque (Write-VolumeCache), la VM est mise
   en pause le temps de `blockdev-snapshot-internal-sync`. Retour à un point VM arrêtée seulement
-  (`qemu-img snapshot -a`). Points automatiques avant Windows Update et les installations, les
-  plus anciens supprimés au-delà de `restore_keep`. L'instantané de l'allègement n'en fait pas partie.
+  (`qemu-img snapshot -a`). Points automatiques (option `restore_auto`, désactivée par défaut)
+  avant Windows Update et les installations, les plus anciens supprimés au-delà de `restore_keep`. L'instantané de l'allègement n'en fait pas partie.
 - **Diagnostic** (`diagnose.py`, `vasistas diagnose [--report]`) : vérifications, réparations
   simples, rapport anonymisé (dossier personnel, utilisateur, machine, mot de passe, fichiers
   des dossiers partagés masqués). **Notifications à action** (`notices.py`) :

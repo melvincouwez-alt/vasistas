@@ -17,12 +17,10 @@ moment (boot_profile). Le reste suit à chaud (PowerManager) :
   sobres (affinité) ;
 - capture : cadence des fenêtres recouvertes dans l'agent (message `capture`).
 
-Le système maison ~/.local/opt/modes-energie (s'il existe) suit power-profiles-daemon : son
-mode Économie est « power-saver », que le profil automatique traite comme la batterie.
+Le mode « power-saver » de power-profiles-daemon (Économie) est traité comme la batterie.
 """
 
 import functools
-import json
 import logging
 import os
 from pathlib import Path
@@ -38,9 +36,6 @@ DEFAULT_APP_MODES = {"pbidesktop": "smooth"}
 # fenêtres recouvertes : délai entre deux captures dans l'agent (ms)
 OCCLUDED_MS = {"battery": 1000, "balanced": 500, "performance": 250}
 CHECK_S = 5
-MODES_ENERGIE = Path.home() / ".local/opt/modes-energie/modes.json"
-# noms du menu d'énergie du système, quand modes-energie est installé
-SYSTEM_NAMES = {"battery": N_("Économie"), "balanced": N_("Équilibré"), "performance": N_("Performance")}
 RESOURCE_LABELS = {"battery": N_("Économie d'énergie"), "balanced": N_("Équilibré"),
                    "performance": N_("Performances")}
 PPD = (("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles"),
@@ -321,20 +316,9 @@ def system_profile():
     return None
 
 
-def energy_modes():
-    """Vrai si le système maison modes-energie est installé (noms alignés sur son menu)."""
-    try:
-        json.loads(MODES_ENERGIE.read_text())
-        return True
-    except (OSError, ValueError):
-        return False
-
-
 def profile_label(profile):
-    """Nom affiché d'un profil : celui du menu d'énergie si modes-energie est là."""
+    """Nom affiché d'un profil."""
     from .i18n import _
-    if energy_modes():
-        return _(SYSTEM_NAMES[profile])
     return _(RESOURCE_LABELS[profile])
 
 

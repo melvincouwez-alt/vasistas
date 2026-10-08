@@ -182,7 +182,7 @@ class AboutPage(Page):
             b = Gtk.LinkButton(uri=url, label=label)
             links.append(b)
         self.add(links)
-        self.add(dim(_("© 2026 Les contributeurs de Vasistas. Windows, Office et Power BI sont des marques de "
+        self.add(dim(_("© 2026 melvincouwez-alt. Windows, Office et Power BI sont des marques de "
                        "Microsoft ; Vasistas n'est ni affilié à Microsoft ni approuvé par lui.")))
         whatsnew = Gtk.Button(label=_("Quoi de neuf"))
         whatsnew.connect("clicked", lambda *_a: self.win.get_application().show_whatsnew())

@@ -1,4 +1,18 @@
 {
+  "0.9.3": {
+    "fr": [
+      "Les icônes du panneau reprennent le dessin de la fenêtre à vasistas, comme l'icône de l'application.",
+      "L'agent Windows publié ne contient plus le chemin de compilation ni l'adresse du dépôt de développement.",
+      "Les noms des profils de puissance ne dépendent plus d'un outil installé à part.",
+      "Documentation mise à jour : emplacement des réglages après la refonte, points de restauration automatiques sur option, capture des fenêtres recouvertes."
+    ],
+    "en": [
+      "Panel icons now use the same tilting-window design as the app icon.",
+      "The published Windows agent no longer contains the build path or the development repository address.",
+      "Power profile names no longer depend on a separately installed tool.",
+      "Documentation updated: where settings are after the redesign, automatic restore points as an option, capture of covered windows."
+    ]
+  },
   "0.9.2": {
     "fr": [
       "Windows 11 et Windows 10 sous licence : l'assistant ouvre la page officielle de Microsoft dans votre navigateur, puis vous choisissez le fichier ISO téléchargé. Vasistas ne passe plus par l'interface interne du site de Microsoft. Les versions d'évaluation se téléchargent toujours directement, par les liens publics de Microsoft.",
@@ -36,10 +50,10 @@
       "Windows suit le bureau : thème clair ou sombre, couleur d'accent, lissage des polices. Ses notifications arrivent sur le bureau et les icônes de sa zone de notification dans le panneau.",
       "Imprimantes Linux disponibles dans Windows ; la touche Super et Alt+Tab peuvent aller à Windows.",
       "Puissance adaptée : moins sur batterie, plus pour les applications lourdes ; arrêt automatique sans fenêtre ouverte, démarrage en veille.",
-      "Onglet Restauration : points avant Windows Update, avant chaque installation et avant l'allègement, retour en un clic.",
+      "Onglet Restauration : point avant l'allègement et, si vous l'activez, avant Windows Update et avant chaque installation ; retour en un clic.",
       "Diagnostic avec réparations et rapport sans données personnelles ; visite guidée et bouton « ? » sur chaque page.",
       "Pilote d'écran maison (expérimental, à poser soi-même) : un vrai rythme de 60 images par seconde pour Windows, coupé quand l'ordinateur est sur batterie. Une notice explique ce qu'il fait et comment revenir en arrière.",
-      "Vasistas parle français et anglais."
+      "Interface en français et en anglais."
     ],
     "en": [
       "Vasistas 0.9 (beta) brings together everything done since 0.5.2: fully redesigned app, main pages in the title bar, the rest in the menu.",
@@ -51,10 +65,10 @@
       "Windows follows the desktop: light or dark theme, accent colour, font smoothing. Its notifications show up on the desktop and its notification area icons in the panel.",
       "Linux printers available in Windows; the Super key and Alt+Tab can go to Windows.",
       "Power that adapts: less on battery, more for heavy apps; automatic shutdown with no open window, start suspended.",
-      "Restoration tab: restore points before Windows Update, before each install and before slimming, back in one click.",
+      "Restoration tab: a restore point before slimming and, if you turn it on, before Windows Update and before each install; back in one click.",
       "Diagnostics with fixes and a report without personal data; guided tour and a “?” button on each page.",
       "Home-made display driver (experimental, installed by hand): a real 60 frames per second rhythm for Windows, turned off on battery. A guide explains what it does and how to go back.",
-      "Vasistas speaks English and French."
+      "Interface in English and French."
     ]
   }
 }

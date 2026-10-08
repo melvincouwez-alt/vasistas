@@ -36,8 +36,8 @@ notre propre canal, et un petit agent dans Windows s'occupe des fenêtres. Windo
 depuis le support de Microsoft avec des réglages adaptés à cet usage, par exemple sans écran de
 verrouillage et avec des mises à jour au moment que vous choisissez.
 
-Légère, parce que rien n'est encodé ni décodé : l'image de l'écran est lue dans une mémoire
-partagée avec la machine virtuelle. Windows se met en pause quand vous ne l'utilisez pas, la
+Légère, parce qu'aucun flux vidéo n'est encodé ni décodé : l'image de l'écran est lue dans une
+mémoire partagée avec la machine virtuelle. Windows se met en pause quand vous ne l'utilisez pas, la
 mémoire dont il n'a pas besoin revient à Linux au fur et à mesure, et une étape facultative
 retire la télémétrie et des services inutiles ici. Sur notre machine, avec Outlook ouvert, la
 machine virtuelle utilise environ 4 Go sur les 8 Go qui lui sont attribués.
@@ -76,8 +76,8 @@ Outlook ou Power BI restent fluides. Dans nos mesures, une touche apparaît à l
   « Réinitialiser les affichages » (application Vasistas, indicateur du panneau ou
   `vasistas reset-windows`) remet chaque fenêtre en place, centrée, à une taille raisonnable.
   Cela se fait aussi tout seul quand un écran est branché ou débranché.
-- Windows suit le bureau : mode sombre, couleur d'accent et lissage des polices en niveaux de
-  gris. Les notifications de Windows deviennent des notifications du bureau, et les icônes de
+- Windows suit le bureau : mode sombre, couleur d'accent et lissage des polices (niveaux de
+  gris ou ClearType). Les notifications de Windows deviennent des notifications du bureau, et les icônes de
   sa zone de notification (OneDrive, Teams…) apparaissent dans le panneau.
 - Les imprimantes de Linux sont disponibles dans Windows, sans ouvrir CUPS au réseau.
 - Un indicateur dans le panneau montre si Windows est en marche, ouvre les applications
@@ -88,8 +88,9 @@ Outlook ou Power BI restent fluides. Dans nos mesures, une touche apparaît à l
 - La puissance suit la situation : moins sur batterie, plus quand une application lourde comme
   Power BI est ouverte. Windows peut être préparé à l'ouverture de session, démarré en veille,
   et arrêté après un délai sans fenêtre ouverte.
-- Des points de restauration enregistrent le disque de Windows avant Windows Update et avant
-  chaque installation, et vous pouvez revenir à l'un d'eux en un clic.
+- Des points de restauration enregistrent le disque de Windows avant l'allègement et, si vous
+  activez l'option, avant Windows Update et avant chaque installation. Vous pouvez revenir à
+  l'un d'eux en un clic.
 - L'application Vasistas, avec un tableau de bord, démarre ou arrête Windows, choisit les
   applications qui apparaissent dans le menu, décide quels types de fichiers s'ouvrent dans
   Windows, allège Windows, lance un diagnostic qui répare ce qu'il peut et écrit un rapport
@@ -101,8 +102,8 @@ Outlook ou Power BI restent fluides. Dans nos mesures, une touche apparaît à l
   barre de titre gardent la leur. À activer dans l'application Vasistas, dans Préférences,
   section Expérimental.
 - Expérimental : un pilote d'affichage modifié donne à Windows le rythme d'un vrai écran à
-  60 Hz. Il s'installe à la main, demande le mode de signature de test de Windows et se coupe
-  sur batterie ; voir [docs/pilote-maison.md](docs/pilote-maison.md).
+  60 Hz. Il n'est pas fourni compilé : il se compile et s'installe séparément, demande le mode
+  de signature de test de Windows et se coupe sur batterie ; voir [docs/pilote-maison.md](docs/pilote-maison.md).
 
 ## Fonctionnement
 
@@ -110,7 +111,8 @@ Windows tourne dans une machine virtuelle QEMU/KVM sur votre ordinateur. Au lieu
 bureau à distance, Vasistas lit l'écran de Windows directement dans la mémoire partagée de QEMU
 (affichage D-Bus) : rien n'est encodé ni envoyé sur un réseau. Un petit agent dans Windows
 indique où se trouve chaque fenêtre et reçoit la souris, le clavier et le presse-papiers par un
-canal virtio. Côté Linux, chaque fenêtre Windows devient une fenêtre GTK 4 qui affiche sa
+canal virtio. Quand une fenêtre est recouverte par une autre dans Windows, l'agent la capture
+(Windows.Graphics.Capture) et envoie ses zones modifiées, compressées, par ce même canal. Côté Linux, chaque fenêtre Windows devient une fenêtre GTK 4 qui affiche sa
 partie de l'écran, avec l'identité de l'application, pour que le bureau puisse la regrouper et
 la décorer correctement. Les dossiers sont partagés par virtio-fs.
 
@@ -163,8 +165,8 @@ activer avec votre propre clé (Paramètres, Système, Activation).
 Téléchargez `vasistas-<version>.tar.gz` depuis la dernière release, puis :
 
 ```
-tar xf vasistas-0.9.2.tar.gz
-cd vasistas-0.9.2
+tar xf vasistas-0.9.3.tar.gz
+cd vasistas-0.9.3
 ./install.sh
 ```
 
@@ -200,7 +202,8 @@ uniquement par leurs commandes, cherchées dans `PATH` au besoin :
 - Lucarne ouvre un document SharePoint ou OneDrive cliqué dans Office, dans la machine
   virtuelle, en lançant `vasistas launch "ms-word:ofe|u|<adresse du fichier>"`,
   `vasistas launch-app <id> [URL]` ou `vasistas open <fichier>`.
-- L'application Vasistas affiche une page « Navigateur » quand la commande `lucarne` existe.
+- L'application Vasistas affiche une section « Navigateur » dans ses Préférences quand la
+  commande `lucarne` existe.
   Elle lit `lucarne status` et `lucarne config get`, et enregistre le choix avec
   `lucarne config set <appli> target vm|web`. `VASISTAS_LUCARNE` remplace la commande.
 - Les lanceurs d'Office dans la machine virtuelle utilisent les icônes `lucarne-<appli>` de
@@ -219,7 +222,7 @@ Vasistas est publié sous licence MIT (voir [LICENSE](LICENSE)).
 
 Il contient [pycdlib](https://github.com/clalancette/pycdlib) (LGPL 2.1, dans `host/vendor`),
 qui sert à construire le CD d'installation. L'agent Windows embarque les types d'interopérabilité
-UI Automation d'[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient)
+UI Automation d'[Interop.UIAutomationClient](https://github.com/FlaUI/UIAutomation-Interop)
 (MIT) et la version Windows officielle de [zstd](https://github.com/facebook/zstd) 1.5.7
 (`libzstd.dll`, BSD). Les correctifs du dossier `patches/` modifient QEMU et gardent sa licence
 (GPL 2.0 ou ultérieure) ; `guest/viogpudo/vsync.patch` modifie le pilote d'affichage de
