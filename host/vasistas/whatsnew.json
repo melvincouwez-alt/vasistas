@@ -1,4 +1,20 @@
 {
+  "0.9.2": {
+    "fr": [
+      "Windows 11 et Windows 10 sous licence : l'assistant ouvre la page officielle de Microsoft dans votre navigateur, puis vous choisissez le fichier ISO téléchargé. Vasistas ne passe plus par l'interface interne du site de Microsoft. Les versions d'évaluation se téléchargent toujours directement, par les liens publics de Microsoft.",
+      "Quand le nom du fichier ISO choisi indique la version et la langue (par exemple Win11_25H2_French_x64.iso), l'assistant le reconnaît.",
+      "Correctif : à l'ouverture de l'assistant, la langue de Windows déjà choisie n'est plus remplacée par la première de la liste (allemand).",
+      "Textes de licence plus clairs : la clé générique publiée par Microsoft choisit seulement l'édition à l'installation, il faut votre propre licence pour activer Windows.",
+      "Page du projet, documentation et notes de version en français."
+    ],
+    "en": [
+      "Licensed Windows 11 and Windows 10: the assistant opens Microsoft's official page in your browser, then you choose the downloaded ISO file. Vasistas no longer uses the internal interface of Microsoft's website. Evaluation versions still download directly, through Microsoft's public links.",
+      "When the name of the chosen ISO file shows the version and language (for example Win11_25H2_French_x64.iso), the assistant recognises it.",
+      "Fix: when the assistant opens, the Windows language already chosen is no longer replaced by the first one in the list (German).",
+      "Clearer licensing texts: the generic key published by Microsoft only selects the edition during installation; your own licence is needed to activate Windows.",
+      "Project page, documentation and release notes in French."
+    ]
+  },
   "0.9.1": {
     "fr": [
       "Nouvelle icône : une fenêtre à vasistas dont l'imposte s'ouvre, à la place du dessin inspiré du logo Windows.",

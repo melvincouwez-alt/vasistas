@@ -1,209 +1,233 @@
 <p align="center">
-  <img src="data/icons/hicolor/128x128/apps/io.github.melvincouwez.Vasistas.svg" width="128" height="128" alt="Vasistas logo">
+  <img src="data/icons/hicolor/128x128/apps/io.github.melvincouwez.Vasistas.svg" width="128" height="128" alt="Logo de Vasistas">
 </p>
 
 <h1 align="center">Vasistas</h1>
 
-<p align="center">Windows applications on the Linux desktop, one window at a time.<br>
-Not a remote desktop: a controlled, lightweight virtual machine, smooth enough for professional tools.</p>
+<p align="center">Les applications Windows sur le bureau Linux, fenêtre par fenêtre.<br>
+Pas un bureau à distance : une machine virtuelle légère et maîtrisée, assez fluide pour les outils de travail.</p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Microsoft Word from the Windows virtual machine next to the Vasistas companion app, on an elementary OS wallpaper">
+  <img src="docs/screenshot.png" alt="Microsoft Word, ouvert dans la machine virtuelle Windows, à côté de l'application Vasistas, sur un fond d'écran d'elementary OS">
   <br>
-  <sub>Word, running in the Windows virtual machine, next to the Vasistas companion app.</sub>
+  <sub>Word, ouvert dans la machine virtuelle Windows, à côté de l'application Vasistas (capture d'une version antérieure).</sub>
 </p>
 
-Vasistas runs Windows in a virtual machine and shows its applications on your Linux desktop as
-if they belonged there. Word, Excel or Power BI open from the Applications menu, get their own
-icon in the dock, and move, resize and switch like any other window. The Windows desktop itself
-stays out of sight: you only see the applications you use.
+Vasistas fait tourner Windows dans une machine virtuelle et affiche ses applications sur le
+bureau Linux comme des applications ordinaires. Word, Excel ou Power BI s'ouvrent depuis le menu
+Applications, ont leur propre icône dans le dock, et se déplacent, se redimensionnent et
+s'alternent comme les autres fenêtres. Le bureau de Windows reste caché : seules les
+applications utilisées sont visibles.
 
-This is not a remote desktop application. Windows runs on your own computer, and Vasistas
-treats it that way: no remote session and no video stream, but a virtualization we keep under
-control, as light as we can make it and smooth enough for the professional tools you work with
-every day.
+Ce n'est pas une application de bureau à distance. Windows tourne sur votre ordinateur, et
+Vasistas le traite comme tel : pas de session distante ni de flux vidéo, mais une machine
+virtuelle que nous gardons sous contrôle, aussi légère que possible et assez fluide pour les
+outils de travail du quotidien.
 
-It is built for elementary OS and should work on other Debian and Ubuntu based systems with
-GTK 4 and Granite. Version 0.9 is a beta release.
+Vasistas est conçu pour elementary OS et devrait fonctionner sur d'autres systèmes basés sur
+Debian ou Ubuntu avec GTK 4 et Granite. La version 0.9 est une bêta : attendez-vous à des
+défauts, et gardez une copie de vos documents importants.
 
-## Our approach
+## Notre approche
 
-Controlled, because each piece is chosen and kept in hand: the virtual machine is started
-directly with QEMU, the screen, keyboard, mouse and clipboard go through our own channel, and a
-small agent inside Windows takes care of the windows. Windows itself is installed from
-Microsoft's media with settings made for this use, such as no lock screen and updates only when
-you decide.
+Maîtrisée, parce que chaque élément est choisi et tenu en main : la machine virtuelle est
+lancée directement avec QEMU, l'écran, le clavier, la souris et le presse-papiers passent par
+notre propre canal, et un petit agent dans Windows s'occupe des fenêtres. Windows est installé
+depuis le support de Microsoft avec des réglages adaptés à cet usage, par exemple sans écran de
+verrouillage et avec des mises à jour au moment que vous choisissez.
 
-Light, because nothing is encoded or decoded: the screen is read from memory shared with the
-virtual machine. Windows pauses when you are not using it, memory it does not need goes back to
-Linux as it goes, and an optional step removes telemetry and services that serve no purpose
-here. On our machine, with Outlook open, the virtual machine uses about 4 GB of the 8 GB it is
-given.
+Légère, parce que rien n'est encodé ni décodé : l'image de l'écran est lue dans une mémoire
+partagée avec la machine virtuelle. Windows se met en pause quand vous ne l'utilisez pas, la
+mémoire dont il n'a pas besoin revient à Linux au fur et à mesure, et une étape facultative
+retire la télémétrie et des services inutiles ici. Sur notre machine, avec Outlook ouvert, la
+machine virtuelle utilise environ 4 Go sur les 8 Go qui lui sont attribués.
 
-Smooth enough for work: typing, scrolling and moving between Word, Excel, Outlook or Power BI
-stay fluid, and in our measurements a key press shows on screen within roughly 25 to 40
-milliseconds. It is not tuned for 3D or games, as explained below.
+Assez fluide pour travailler : la saisie, le défilement et le passage entre Word, Excel,
+Outlook ou Power BI restent fluides. Dans nos mesures, une touche apparaît à l'écran en 25 à
+40 millisecondes environ. Vasistas n'est pas réglé pour la 3D ni les jeux (voir plus bas).
 
-## The experience we are aiming for
+## Ce que nous visons
 
-- Each Windows application window is a real window of your desktop, with its own entry in the
-  dock and in the window switcher. Menus, dialogs and tooltips appear where you expect them.
-- Your Documents and Downloads folders show up as drives in Windows, and Windows' own
-  Documents, Pictures or Downloads folders can point to them. Double-clicking a `.docx`, `.xlsx`
-  or `.pbix` file in Files opens it in the matching Windows application.
-- Text, formatted text and images copy and paste between both sides.
-- Windows plays sound through PipeWire and can use your microphone; the microphone is only
-  read while a Windows application has it open. Sound can be turned off in the companion app.
-- Windows takes the scale of the screen that holds most of its windows, and windows on that
-  screen are shown pixel for pixel, so text stays sharp. Clicking from one screen to another
-  changes nothing; moving windows across does, once they are dropped.
-- Windows pauses itself when you are not using it and resumes on the next click; memory it does
-  not need goes back to Linux.
-- A setup assistant downloads Windows from Microsoft in the language you pick, installs it
-  unattended with a local account, then installs Microsoft Office and other common
-  applications.
-- You choose which screen each application opens on (the active one, the last one used, or a
-  given monitor). Vasistas remembers the size and screen of each application for each
-  combination of screens, never opens a window larger than its screen, and "Reset displays"
-  (companion app, panel indicator or `vasistas reset-windows`) puts every window back, centred,
-  at a sensible size. It also happens by itself when a screen is plugged in or unplugged.
-- Windows follows the desktop: dark mode, accent colour and greyscale font smoothing. Windows
-  notifications become desktop notifications, and the icons of its notification area
-  (OneDrive, Teams…) show up in the panel.
-- Linux printers are available in Windows, without opening CUPS to the network.
-- A panel indicator shows whether Windows is running, opens recent applications and starts,
-  suspends or stops Windows.
-- A single slider sets how Windows draws: Optimized for mail and documents, Balanced, or Smooth
-  for Power BI, video and long scrolls. An application can keep its own mode while it is in the
-  foreground.
-- Power follows the situation: less on battery, more while a heavy application such as Power BI
-  is open. Windows can be prepared at login, started suspended, and shut down after a while
-  without any open window.
-- Restore points save the Windows disk before Windows Update and before each installation, and
-  you can go back to one in a click.
-- A companion app, with a dashboard, starts or stops Windows, chooses which applications appear
-  in the menu, decides which file types open in Windows, trims Windows down, runs a diagnosis
-  that fixes what it can and writes a report without personal data, and checks for updates.
-- The interface is available in English and French.
-- Experimental: windows whose title bar is drawn by Windows (File Explorer, classic dialogs)
-  can get the desktop's own title bar instead, with its rounded corners and shadow. Office, Edge
-  and applications that draw their own title bar keep theirs. Turn it on in the companion app,
-  under Settings > Experimental.
-- Experimental: a modified display driver gives Windows the rhythm of a real 60 Hz screen. It
-  is installed by hand, needs Windows' test-signing mode and is turned off on battery; see
-  [docs/pilote-maison.md](docs/pilote-maison.md) (in French).
+- Chaque fenêtre d'une application Windows est une vraie fenêtre du bureau, avec sa place dans
+  le dock et dans le sélecteur de fenêtres. Menus, boîtes de dialogue et infobulles
+  apparaissent là où on les attend.
+- Les dossiers Documents et Téléchargements apparaissent comme des lecteurs dans Windows, et
+  les dossiers Documents, Images ou Téléchargements de Windows peuvent pointer vers eux. Un
+  double-clic sur un fichier `.docx`, `.xlsx` ou `.pbix` dans Fichiers l'ouvre dans
+  l'application Windows correspondante.
+- Le texte, le texte mis en forme et les images se copient et se collent dans les deux sens.
+- Windows joue le son par PipeWire et peut utiliser le micro ; le micro n'est lu que lorsqu'une
+  application Windows l'a ouvert. Le son peut être coupé dans l'application Vasistas.
+- Windows prend l'échelle de l'écran qui contient la plupart de ses fenêtres, et les fenêtres
+  de cet écran sont affichées pixel pour pixel, donc le texte reste net. Cliquer d'un écran à
+  l'autre ne change rien ; déplacer des fenêtres d'un écran à l'autre, si, une fois qu'elles
+  sont posées.
+- Windows se met en pause quand vous ne l'utilisez pas et reprend au clic suivant ; la mémoire
+  dont il n'a pas besoin revient à Linux.
+- Un assistant d'installation prépare Windows dans la langue choisie. Les versions
+  d'évaluation de 90 jours se téléchargent directement par les liens publics de Microsoft ;
+  pour les autres versions, l'assistant ouvre la page officielle de Microsoft et vous
+  choisissez ensuite le fichier ISO téléchargé. L'installation se fait sans intervention, avec
+  un compte local, puis l'assistant installe Microsoft Office et d'autres applications
+  courantes.
+- Vous choisissez l'écran où s'ouvre chaque application (l'écran actif, le dernier utilisé ou
+  un écran précis). Vasistas retient la taille et l'écran de chaque application pour chaque
+  combinaison d'écrans, n'ouvre jamais une fenêtre plus grande que son écran, et
+  « Réinitialiser les affichages » (application Vasistas, indicateur du panneau ou
+  `vasistas reset-windows`) remet chaque fenêtre en place, centrée, à une taille raisonnable.
+  Cela se fait aussi tout seul quand un écran est branché ou débranché.
+- Windows suit le bureau : mode sombre, couleur d'accent et lissage des polices en niveaux de
+  gris. Les notifications de Windows deviennent des notifications du bureau, et les icônes de
+  sa zone de notification (OneDrive, Teams…) apparaissent dans le panneau.
+- Les imprimantes de Linux sont disponibles dans Windows, sans ouvrir CUPS au réseau.
+- Un indicateur dans le panneau montre si Windows est en marche, ouvre les applications
+  récentes et démarre, met en veille ou arrête Windows.
+- Un seul curseur règle l'affichage de Windows : Optimisé pour le courrier et les documents,
+  Équilibré, ou Fluide pour Power BI, la vidéo et les longs défilements. Une application peut
+  garder son propre mode tant qu'elle est au premier plan.
+- La puissance suit la situation : moins sur batterie, plus quand une application lourde comme
+  Power BI est ouverte. Windows peut être préparé à l'ouverture de session, démarré en veille,
+  et arrêté après un délai sans fenêtre ouverte.
+- Des points de restauration enregistrent le disque de Windows avant Windows Update et avant
+  chaque installation, et vous pouvez revenir à l'un d'eux en un clic.
+- L'application Vasistas, avec un tableau de bord, démarre ou arrête Windows, choisit les
+  applications qui apparaissent dans le menu, décide quels types de fichiers s'ouvrent dans
+  Windows, allège Windows, lance un diagnostic qui répare ce qu'il peut et écrit un rapport
+  sans données personnelles, et vérifie les mises à jour.
+- L'interface est disponible en français et en anglais.
+- Expérimental : les fenêtres dont la barre de titre est dessinée par Windows (Explorateur de
+  fichiers, anciennes boîtes de dialogue) peuvent recevoir la barre de titre du bureau, avec
+  ses coins arrondis et son ombre. Office, Edge et les applications qui dessinent leur propre
+  barre de titre gardent la leur. À activer dans l'application Vasistas, dans Préférences,
+  section Expérimental.
+- Expérimental : un pilote d'affichage modifié donne à Windows le rythme d'un vrai écran à
+  60 Hz. Il s'installe à la main, demande le mode de signature de test de Windows et se coupe
+  sur batterie ; voir [docs/pilote-maison.md](docs/pilote-maison.md).
 
-## How it works
+## Fonctionnement
 
-Windows runs in a QEMU/KVM virtual machine on your computer. Instead of streaming a remote
-desktop, Vasistas reads the Windows screen directly from QEMU's shared memory (D-Bus display),
-so nothing is encoded or sent over a network. A small agent inside Windows reports where each
-window is and receives mouse, keyboard and clipboard events over a virtio channel. On the Linux
-side, each Windows window becomes a GTK 4 window showing its part of the screen, labelled with
-the application's own identity so the desktop can group and decorate it properly. Folders are
-shared with virtio-fs.
+Windows tourne dans une machine virtuelle QEMU/KVM sur votre ordinateur. Au lieu de diffuser un
+bureau à distance, Vasistas lit l'écran de Windows directement dans la mémoire partagée de QEMU
+(affichage D-Bus) : rien n'est encodé ni envoyé sur un réseau. Un petit agent dans Windows
+indique où se trouve chaque fenêtre et reçoit la souris, le clavier et le presse-papiers par un
+canal virtio. Côté Linux, chaque fenêtre Windows devient une fenêtre GTK 4 qui affiche sa
+partie de l'écran, avec l'identité de l'application, pour que le bureau puisse la regrouper et
+la décorer correctement. Les dossiers sont partagés par virtio-fs.
 
-The technical details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the host/agent
-protocol in [PROTOCOL.md](PROTOCOL.md).
+Les détails techniques sont dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) et le protocole
+entre l'hôte et l'agent dans [PROTOCOL.md](PROTOCOL.md).
 
-## What it is not
+## Ce que Vasistas n'est pas
 
-Vasistas is meant for desktop applications, not for games. Without a graphics card passed to
-the virtual machine, Windows renders in software: office and business applications stay
-responsive, but 3D, demanding video and games do not, and anti-cheat systems usually refuse
-virtual machines. Passing a dedicated graphics card to Windows is possible but experimental.
+Vasistas est fait pour les applications de bureau, pas pour les jeux. Sans carte graphique
+attribuée à la machine virtuelle, Windows fait son rendu par le processeur : les applications
+de bureautique et de gestion restent réactives, mais pas la 3D, la vidéo exigeante ni les jeux,
+et les systèmes anti-triche refusent en général les machines virtuelles. Attribuer une carte
+graphique dédiée à Windows est possible mais expérimental.
 
-There is no webcam or USB passthrough yet.
+La webcam et le passage direct de périphériques USB ne sont pas encore pris en charge.
 
-### Sharpness on several screens
+### Netteté sur plusieurs écrans
 
-Windows has a single display, so a single scale. When your screens use different scales, for
-example an external monitor at 100 % and a laptop screen at 200 %, only the windows on one of
-them can be drawn by Windows at the right size. Windows on the other screen are resized by
-the desktop and can look soft or blurry. This comes from how the image is rendered, not from
-the application itself, and moving the windows back fixes it.
+Windows n'a qu'un écran, donc une seule échelle. Si vos écrans ont des échelles différentes,
+par exemple un écran externe à 100 % et l'écran d'un portable à 200 %, seules les fenêtres de
+l'un d'eux peuvent être dessinées par Windows à la bonne taille. Les fenêtres de l'autre écran
+sont redimensionnées par le bureau et peuvent paraître floues. Cela vient de la façon dont
+l'image est rendue, pas de l'application, et ramener les fenêtres sur le premier écran règle
+le problème.
 
-To keep this to a minimum:
+Pour limiter cet effet :
 
-- prefer whole-number scales (100 %, 200 %): Windows then has an exact matching step, and a
-  window on the other screen is resized by exactly two, which stays readable;
-- fractional scales such as 167 % work, but Windows uses its nearest step (175 %) and windows
-  moved to another screen lose more detail;
-- keep the Windows applications you use together on the same screen when you can.
+- préférez les échelles entières (100 %, 200 %) : Windows a alors un palier exact, et une
+  fenêtre sur l'autre écran est réduite exactement de moitié, ce qui reste lisible ;
+- les échelles fractionnaires comme 167 % fonctionnent, mais Windows prend son palier le plus
+  proche (175 %) et les fenêtres déplacées sur un autre écran perdent plus de détails ;
+- gardez si possible les applications Windows utilisées ensemble sur le même écran.
 
-## Requirements
+## Configuration requise
 
-- elementary OS 8 or 9, or another Debian or Ubuntu based system (Ubuntu 24.04 or later) with
-  GTK 4 and Granite 7; only the Pantheon desktop is tested so far
-- a processor with hardware virtualization enabled (KVM), 16 GB of memory recommended, and
-  about 100 GB of free disk space
-- a Windows license, or a 90-day evaluation version that the assistant can download; licenses
-  or subscriptions for Office and any other paid software
+- elementary OS 8 ou 9, ou un autre système basé sur Debian ou Ubuntu (Ubuntu 24.04 ou
+  ultérieur) avec GTK 4 et Granite 7 ; seul le bureau Pantheon est testé pour l'instant
+- un processeur avec la virtualisation matérielle activée (KVM), 16 Go de mémoire conseillés
+  et environ 100 Go d'espace disque libre
+- votre propre licence Windows, ou une version d'évaluation de 90 jours que l'assistant peut
+  télécharger ; les licences ou abonnements d'Office et des autres logiciels payants
+
+Pour installer une version sous licence sans saisir de clé tout de suite, l'assistant utilise
+une clé générique publiée par Microsoft. Cette clé choisit seulement l'édition pendant
+l'installation : elle n'active pas Windows et ne remplace pas une licence. Windows reste à
+activer avec votre propre clé (Paramètres, Système, Activation).
 
 ## Installation
 
-Download `vasistas-<version>.tar.gz` from the latest release, then:
+Téléchargez `vasistas-<version>.tar.gz` depuis la dernière release, puis :
 
 ```
-tar xf vasistas-0.9.0.tar.gz
-cd vasistas-0.9.0
+tar xf vasistas-0.9.2.tar.gz
+cd vasistas-0.9.2
 ./install.sh
 ```
 
-The script installs Vasistas in your home folder without administrator rights. If system
-packages are missing, it prints the `sudo apt install …` command to run. Then open "Vasistas"
-from the Applications menu and follow the assistant. Updates are offered from the app itself.
+Le script installe Vasistas dans votre dossier personnel, sans droits d'administrateur. S'il
+manque des paquets du système, il affiche la commande `sudo apt install …` à lancer. Ouvrez
+ensuite « Vasistas » depuis le menu Applications et suivez l'assistant. Les mises à jour sont
+proposées dans l'application.
 
-To prepare a Windows installation made by other means, see
+Pour préparer une installation de Windows faite autrement, voir
 [docs/configure-windows.md](docs/configure-windows.md).
 
-## Command line
+## Ligne de commande
 
-The `vasistas` command (in `~/.local/bin`) also works from a terminal:
+La commande `vasistas` (dans `~/.local/bin`) fonctionne aussi depuis un terminal :
 
 ```
-vasistas vm start|stop|status          # the virtual machine
-vasistas launch-app winword            # a known application
-vasistas open ~/Documents/report.docx  # a file, in its Windows application
-vasistas files list|set csv excel      # file types opened in Windows
-vasistas folders list|link|unlink      # Windows folders pointing to Linux folders
-vasistas exec 'Get-Process'            # a PowerShell script inside Windows
-vasistas companion                     # the companion app
+vasistas vm start|stop|status          # la machine virtuelle
+vasistas launch-app winword            # une application connue
+vasistas open ~/Documents/rapport.docx # un fichier, dans son application Windows
+vasistas files list|set csv excel      # types de fichiers ouverts dans Windows
+vasistas folders list|link|unlink      # dossiers de Windows qui pointent vers des dossiers Linux
+vasistas exec 'Get-Process'            # un script PowerShell dans Windows
+vasistas companion                     # l'application Vasistas
 ```
 
-## Working with Lucarne
+## Avec Lucarne
 
-[Lucarne](https://github.com/melvincouwez-alt/lucarne) is a separate project that opens the
-Microsoft 365 web apps in desktop windows. The two share no code and work fine alone. When both
-are installed, they talk through their commands only, looked up in `PATH` when needed:
+[Lucarne](https://github.com/melvincouwez-alt/lucarne) est un projet distinct qui ouvre les
+applications web de Microsoft 365 dans des fenêtres du bureau. Les deux projets ne partagent
+pas de code et fonctionnent chacun seul. Quand les deux sont installés, ils communiquent
+uniquement par leurs commandes, cherchées dans `PATH` au besoin :
 
-- Lucarne opens a clicked SharePoint or OneDrive document in Office inside the VM by running
-  `vasistas launch "ms-word:ofe|u|<file address>"`, `vasistas launch-app <id> [URL]` or
-  `vasistas open <file>`.
-- The companion app shows a "Browser" page when the `lucarne` command exists. It reads
-  `lucarne status` and `lucarne config get`, and writes the choice with
-  `lucarne config set <app> target vm|web`. `VASISTAS_LUCARNE` overrides the command.
-- Launchers for Office in the VM use Lucarne's `lucarne-<app>` icons when the icon theme has
-  them, otherwise the icons taken from Windows.
+- Lucarne ouvre un document SharePoint ou OneDrive cliqué dans Office, dans la machine
+  virtuelle, en lançant `vasistas launch "ms-word:ofe|u|<adresse du fichier>"`,
+  `vasistas launch-app <id> [URL]` ou `vasistas open <fichier>`.
+- L'application Vasistas affiche une page « Navigateur » quand la commande `lucarne` existe.
+  Elle lit `lucarne status` et `lucarne config get`, et enregistre le choix avec
+  `lucarne config set <appli> target vm|web`. `VASISTAS_LUCARNE` remplace la commande.
+- Les lanceurs d'Office dans la machine virtuelle utilisent les icônes `lucarne-<appli>` de
+  Lucarne quand le thème d'icônes les contient, sinon les icônes reprises de Windows.
 
-## Development
+## Développement
 
-The host is written in Python with GTK 4 and Granite (`host/vasistas`), the Windows agent in
-C# for .NET Framework 4.8 (`guest/Vasistas.Agent`, built with `dotnet build -c Release`).
-`./check.sh` runs the tests and builds the agent; `tools/make-release.sh` packages a release.
+L'hôte est écrit en Python avec GTK 4 et Granite (`host/vasistas`), l'agent Windows en C# pour
+.NET Framework 4.8 (`guest/Vasistas.Agent`, compilé avec `dotnet build -c Release`).
+`./check.sh` lance les tests et compile l'agent ; `tools/make-release.sh` prépare une archive
+de release.
 
-## License
+## Licence
 
-Vasistas is released under the MIT License (see [LICENSE](LICENSE)).
+Vasistas est publié sous licence MIT (voir [LICENSE](LICENSE)).
 
-It includes [pycdlib](https://github.com/clalancette/pycdlib) (LGPL 2.1, in `host/vendor`) to
-build the setup CD. The Windows agent embeds the UI Automation interop types of
-[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) (MIT) and the
-official Windows build of [zstd](https://github.com/facebook/zstd) 1.5.7 (`libzstd.dll`, BSD).
-The patches in `patches/` modify QEMU and keep its license (GPL 2.0 or later);
-`guest/viogpudo/vsync.patch` modifies the virtio-win display driver and keeps its license
-(BSD 3-Clause). License texts and details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Il contient [pycdlib](https://github.com/clalancette/pycdlib) (LGPL 2.1, dans `host/vendor`),
+qui sert à construire le CD d'installation. L'agent Windows embarque les types d'interopérabilité
+UI Automation d'[Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient)
+(MIT) et la version Windows officielle de [zstd](https://github.com/facebook/zstd) 1.5.7
+(`libzstd.dll`, BSD). Les correctifs du dossier `patches/` modifient QEMU et gardent sa licence
+(GPL 2.0 ou ultérieure) ; `guest/viogpudo/vsync.patch` modifie le pilote d'affichage de
+virtio-win et garde sa licence (BSD 3 clauses). Textes des licences et détails :
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Windows, Office, Power BI and the other software mentioned belong to their publishers. Vasistas
-does not ship any Microsoft software or license; it downloads the official installers. Vasistas
-is an independent project, not affiliated with or endorsed by Microsoft.
+Windows, Office, Power BI et les autres logiciels cités appartiennent à leurs éditeurs.
+Vasistas ne contient aucun logiciel ni aucune licence de Microsoft : les images et
+installateurs de Microsoft se téléchargent depuis ses sites officiels, et leur utilisation
+reste soumise à leurs propres conditions de licence. Vasistas est un projet indépendant, sans
+lien avec Microsoft ni approbation de sa part.

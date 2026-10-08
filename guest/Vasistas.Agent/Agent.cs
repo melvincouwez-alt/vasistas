@@ -33,7 +33,7 @@ namespace Vasistas.Agent
         // version de Vasistas pour laquelle l'agent est construit (champ agentVersion du hello) :
         // à tenir égale à VERSION de host/vasistas/version.py ; l'hôte propose une mise à jour si
         // l'agent est plus ancien (version.newer)
-        const string AgentVersion = "0.9.1";
+        const string AgentVersion = "0.9.2";
         // La liste des fenêtres suit les événements de Windows (SetWinEventHook) ; le balayage
         // périodique n'est plus qu'un filet de sécurité.
         const int FallbackScanMs = 500, MinScanGapMs = 8, SyncMs = 3000, IdleWaitMs = 500, NoHostWaitMs = 1000;

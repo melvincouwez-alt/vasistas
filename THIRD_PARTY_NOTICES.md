@@ -1,15 +1,22 @@
-# Third-party notices
+# Composants tiers
 
-Vasistas is released under the MIT License (see [LICENSE](LICENSE)). It includes or modifies
-the following third-party software, each under its own license.
+Vasistas est publié sous licence MIT (voir [LICENSE](LICENSE)). Il contient ou modifie les
+logiciels tiers suivants, chacun sous sa propre licence. Les textes des licences sont
+reproduits plus bas dans leur langue d'origine (l'anglais), qui seule fait foi.
 
-| Component | Where | License |
+| Composant | Emplacement | Licence |
 |---|---|---|
-| [zstd](https://github.com/facebook/zstd) 1.5.7, official Windows build (`libzstd.dll`) | `guest/Vasistas.Agent/native/libzstd.dll.gz`, embedded in `Vasistas.Agent.exe` | BSD 3-Clause |
-| [Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) 10.19041.0 | interop types embedded in `Vasistas.Agent.exe` | MIT |
-| [pycdlib](https://github.com/clalancette/pycdlib) 1.21.0 | `host/vendor`, unmodified | LGPL 2.1 (`host/vendor/pycdlib-1.21.0.dist-info/licenses/COPYING`) |
-| Patch to [QEMU](https://www.qemu.org) | `patches/qemu-11.1.1-pixman-udmabuf.patch` | GPL 2.0 or later, like QEMU |
-| Patch to viogpudo from [virtio-win](https://github.com/virtio-win/kvm-guest-drivers-windows) | `guest/viogpudo/vsync.patch` | BSD 3-Clause, like virtio-win |
+| [zstd](https://github.com/facebook/zstd) 1.5.7, version Windows officielle (`libzstd.dll`) | `guest/Vasistas.Agent/native/libzstd.dll.gz`, intégré à `Vasistas.Agent.exe` | BSD 3 clauses |
+| [Interop.UIAutomationClient](https://github.com/Roemer/Interop.UIAutomationClient) 10.19041.0 | types d'interopérabilité intégrés à `Vasistas.Agent.exe` | MIT |
+| [pycdlib](https://github.com/clalancette/pycdlib) 1.21.0 | `host/vendor`, sans modification | LGPL 2.1 (`host/vendor/pycdlib-1.21.0.dist-info/licenses/COPYING`) |
+| Correctif de [QEMU](https://www.qemu.org) | `patches/qemu-11.1.1-pixman-udmabuf.patch` | GPL 2.0 ou ultérieure, comme QEMU |
+| Correctif de viogpudo, tiré de [virtio-win](https://github.com/virtio-win/kvm-guest-drivers-windows) | `guest/viogpudo/vsync.patch` | BSD 3 clauses, comme virtio-win |
+
+Vasistas ne contient aucun logiciel de Microsoft. Les images d'installation de Windows,
+Office, les pilotes virtio-win (projet Fedora) et les applications installées par winget sont
+téléchargés depuis leurs sources officielles au moment de l'installation et restent soumis à
+leurs propres licences. La capture `docs/screenshot.png` montre Microsoft Word avec un
+document fictif.
 
 ## zstd
 

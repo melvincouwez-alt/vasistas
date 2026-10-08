@@ -1,39 +1,29 @@
 """Images ISO officielles de Windows : choix de la version et de la langue, lien chez Microsoft,
 téléchargement.
 
-Deux sources, vérifiées le 2026-09-29 (jusqu'au lien et à la taille annoncée) :
+Deux sources, vérifiées le 2026-09-29 :
 
 - Pages grand public (software-download/windows11, windows10ISO) : ISO multi-édition. Microsoft
-  ne publie pas de lien direct ; la page passe par une API (software-download-connector) qui
-  n'accepte qu'une session « enregistrée », même chemin que Fido (pbatard/Fido) :
-  1. identifiant d'édition du produit lu dans la page (3321 : Windows 11 25H2, 2618 : Windows 10) ;
-  2. session (uuid) déclarée à vlscppe.microsoft.com/tags, puis aller-retour ov-df.microsoft.com
-     (mdt.js donne `w` et `rticks`, renvoyés avec l'heure) ;
-  3. getskuinformationbyproductedition : une référence (SKU) par langue ;
-  4. GetProductDownloadLinksBySku (avec Referer) : lien du fichier, valable 24 h.
-  Microsoft refuse parfois (« Sentinel », code 715-123130 : trop de demandes depuis la même
-  adresse, VPN, pays sous sanctions) : `DownloadBlocked`, l'utilisateur passe alors par la page
-  officielle dans son navigateur.
+  ne publie pas de lien direct pour ces images ; Vasistas ouvre la page officielle dans le
+  navigateur (official_page) et l'utilisateur choisit ensuite le fichier téléchargé.
 - Evaluation Center (evalcenter/download-windows-11-…) : versions d'évaluation de 90 jours,
-  sans clé, liens go.microsoft.com/fwlink fixes (un par langue), redirigés vers le fichier.
+  sans clé, liens publics go.microsoft.com/fwlink fixes (un par langue), redirigés vers le
+  fichier ; Vasistas les télécharge lui-même.
 
 Licence : l'ISO multi-édition installe l'édition de la clé donnée à l'installation. Sans clé
 de l'utilisateur, une clé générique publique de Microsoft (GENERIC_KEYS) choisit l'édition :
-Windows s'installe sans être activé, l'utilisateur l'active ensuite avec sa propre licence
+Windows s'installe sans être activé, l'utilisateur l'active ensuite avec sa propre licence, qu'il doit posséder
 (Paramètres > Système > Activation). Les versions d'évaluation s'installent sans clé et ne se
 convertissent pas en version sous licence : il faut alors réinstaller avec l'ISO multi-édition.
 Module sans interface, appels bloquants : hors du fil GTK.
 """
 
-import json
 import locale as _locale
 import os
 import re
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 from http.cookiejar import CookieJar
 from pathlib import Path
 
@@ -41,18 +31,10 @@ from .i18n import N_, _
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
 TIMEOUT_S = 30
-ORG_ID = "y6jn8c31"
-PROFILE_ID = "606624d44113"
-INSTANCE_ID = "560dc9f3-1aa5-4a2f-b63c-9e18f8d0e175"   # constant chez Microsoft (Fido)
-PRODUCT_EDITION_ID = 3321  # repli : Windows 11 25H2 v2, ISO multi-édition x64
-REFERER = "https://www.microsoft.com/software-download/windows11"
-RETRY_S = 5
-ARCH_TYPES = {0: "x86", 1: "x64", 2: "arm64"}  # DownloadType de l'API
-EVAL_PAGE = "https://www.microsoft.com/en-us/evalcenter/{page}"
+EVAL_PAGE = "https://www.microsoft.com/{loc}/evalcenter/{page}"
 FWLINK = "https://go.microsoft.com/fwlink/?linkid={id}&clcid=0x409&culture=en-us&country=us"
 
 # Langues proposées pour Windows 11 25H2 (nom Microsoft, nom affiché), relevées le 2026-09-29.
-# get_link interroge Microsoft : une langue retirée depuis donne une DownloadError claire.
 LANGUAGES = [
     ("German", N_("Allemand")), ("English", N_("Anglais (États-Unis)")),
     ("English International", N_("Anglais international")), ("Arabic", N_("Arabe")),
@@ -167,8 +149,7 @@ VERSIONS = [
         "key": "win11", "label": "Windows 11 (25H2)",
         "description": N_("Version actuelle, toutes les éditions grand public (Famille, Professionnel, "
                           "Éducation…). S'active avec votre licence."),
-        "method": "api", "page": "windows11", "product_edition_id": 3321,
-        "referer": "https://www.microsoft.com/software-download/windows11",
+        "method": "page", "page": "windows11",
         "arch": ["x64"], "languages": list(LANGUAGES), "eval": False, "needs_key": True,
         "editions": CONSUMER_EDITIONS, "default": True,
         "note": N_("Clé de produit demandée à l'installation : votre clé, ou une clé générique qui installe Windows "
@@ -207,8 +188,7 @@ VERSIONS = [
     {
         "key": "win10", "label": "Windows 10 (22H2)",
         "description": N_("Ancienne version, pour les applications qui l'exigent."),
-        "method": "api", "page": "windows10ISO", "product_edition_id": 2618,
-        "referer": "https://www.microsoft.com/software-download/windows10ISO",
+        "method": "page", "page": "windows10ISO",
         "arch": ["x64", "x86"], "languages": list(LANGUAGES), "eval": False, "needs_key": True,
         "editions": CONSUMER_EDITIONS, "end_of_support": "2025-10-14",
         "note": N_("Support terminé le 14 octobre 2025 : plus de mises à jour de sécurité sans le "
@@ -270,10 +250,6 @@ class DownloadError(RuntimeError):
     """Lien ou téléchargement impossible (réseau, réponse inattendue de Microsoft)."""
 
 
-class DownloadBlocked(DownloadError):
-    """Microsoft refuse de servir cette adresse (« Sentinel », code 715-123130)."""
-
-
 class DownloadCancelled(DownloadError):
     """Téléchargement interrompu à la demande ; le fichier .part reste pour la reprise."""
 
@@ -306,9 +282,18 @@ def web_locale(loc=None):
     return f"{lang}-{(region or lang).lower()}"
 
 
-def official_page(loc=None):
-    """Page officielle de téléchargement de Windows 11, dans la langue du système."""
-    return f"https://www.microsoft.com/{web_locale(loc)}/software-download/windows11"
+def official_page(version_key=DEFAULT_VERSION, loc=None):
+    """Page officielle de Microsoft où télécharger une version, dans la langue du système."""
+    v = get_version(version_key)
+    if v["method"] == "evalcenter":
+        return EVAL_PAGE.format(loc=web_locale(loc), page=v["page"])
+    return f"https://www.microsoft.com/{web_locale(loc)}/software-download/{v['page']}"
+
+
+def can_download(version_key):
+    """Vrai si Vasistas télécharge lui-même l'image (lien public fixe de l'Evaluation Center) ;
+    sinon l'image se télécharge dans le navigateur, depuis official_page()."""
+    return get_version(version_key)["method"] == "evalcenter"
 
 
 def buy_url(edition="pro", loc=None):
@@ -342,6 +327,15 @@ def language_for_locale(loc=None):
     if lang == "zh" and region in ("SG", "CN", ""):
         return "Chinese (Simplified)"
     return _BY_LANG.get(lang, "English")
+
+
+def iso_matches(filename, version_key, language):
+    """Vrai si le nom d'un fichier ISO de Microsoft (« Win11_25H2_French_x64_v2.iso ») indique
+    la version et la langue choisies. Faux si le nom ne permet pas de le savoir."""
+    flat = re.sub(r"[^a-z0-9]", "", (filename or "").lower())
+    prefix = {"win11": "win11", "win10": "win10"}.get(version_key)
+    lang = re.sub(r"[^a-z]", "", (language or "").lower())
+    return bool(prefix and lang and flat.startswith(prefix) and lang in flat)
 
 
 # -- clés de produit --
@@ -392,104 +386,6 @@ class _Session:
 _session_factory = _Session  # remplacé dans les tests
 
 
-def _json(body, what):
-    try:
-        return json.loads(body)
-    except ValueError as e:
-        raise DownloadError(_("réponse illisible de Microsoft ({what})", what=what)) from e
-
-
-def _blocked_message(page_html):
-    """Message de refus affiché par la page de Microsoft (msg-01), sinon un message à nous.
-    Suivi du conseil : attendre, ou passer par la page officielle dans le navigateur."""
-    m = re.search(r'id="msg-01"[^>]*value="(.*?)"', page_html or "", re.S)
-    text = ""
-    if m:
-        text = re.sub(r"<[^>]+>", "", m.group(1).replace("&lt;", "<").replace("&gt;", ">"))
-        text = re.sub(r"\s+", " ", text).strip()
-    if "715-123130" not in text:
-        text = _("Microsoft refuse le téléchargement depuis cette adresse (code 715-123130) : "
-                 "trop de demandes, VPN ou pays sous sanctions")
-    return _("{reason}. Réessayez dans une heure, téléchargez l'image depuis la page officielle de Microsoft dans le "
-             "navigateur, ou choisissez une version d'évaluation.", reason=text.rstrip(". "))
-
-
-def _is_sentinel(error):
-    """Refus de « Sentinel », la protection de Microsoft : type 9 (adresse bannie, 715-123130)
-    ou type 8 (trop de demandes rapprochées, passager)."""
-    return error.get("Type") in (8, 9) or "Sentinel" in str(error.get("Key", "")) + str(error.get("Value", ""))
-
-
-def _edition_id(page_html, fallback=PRODUCT_EDITION_ID):
-    """Identifiant de l'ISO multi-édition dans la page (première option « Windows »)."""
-    m = re.search(r'<option value="(\d+)"[^>]*>\s*Windows', page_html or "")
-    return int(m.group(1)) if m else fallback
-
-
-def _api_locale(loc):
-    lang, region = web_locale(loc).split("-")
-    return f"{lang}-{region.upper()}"
-
-
-class _ApiSession:
-    """Session enregistrée auprès de Microsoft pour une version des pages grand public."""
-
-    API = "https://www.microsoft.com/software-download-connector/api/"
-
-    def __init__(self, v, loc):
-        self.v, self.loc = v, loc
-        self.s = _session_factory()
-        page_url = f"https://www.microsoft.com/{web_locale(loc)}/software-download/{v['page']}"
-        status, _h, body = self.s.request(page_url)
-        self.page = body.decode("utf-8", "replace") if status == 200 else ""
-        self.edition = _edition_id(self.page, v["product_edition_id"])
-        # session déclarée à Microsoft (sans quoi l'API refuse de répondre)
-        self.sid = sid = str(uuid.uuid4())
-        self.s.request(f"https://vlscppe.microsoft.com/tags?org_id={ORG_ID}&session_id={sid}")
-        _s, _h, js = self.s.request(f"https://ov-df.microsoft.com/mdt.js?instanceId={INSTANCE_ID}"
-                                  f"&PageId=si&session_id={sid}")
-        js = js.decode("utf-8", "replace")
-        w = re.search(r"[?&]w=([A-F0-9]+)", js)
-        rticks = re.search(r'rticks\="\+?(\d+)', js)
-        if not w or not rticks:
-            raise DownloadError(_("protection du site de Microsoft : réponse inattendue (ov-df)"))
-        self.s.request(f"https://ov-df.microsoft.com/?session_id={sid}&CustomerId={INSTANCE_ID}"
-                       f"&PageId=si&w={w.group(1)}&mdt={int(time.time() * 1000)}&rticks={rticks.group(1)}")
-
-    def _query(self, **params):
-        return urllib.parse.urlencode({"profile": PROFILE_ID, "friendlyFileName": "undefined",
-                                       "Locale": _api_locale(self.loc), "sessionID": self.sid, **params})
-
-    def skus(self):
-        q = self._query(productEditionId=self.edition, SKU="undefined")
-        for attempt in range(3):  # parfois vide au premier essai (Fido fait de même)
-            if attempt:
-                time.sleep(2)
-            status, _h, body = self.s.request(self.API + "getskuinformationbyproductedition?" + q)
-            data = _json(body, _("langues")) if status == 200 else {}
-            if data.get("Skus") and not data.get("Errors"):
-                return data["Skus"]
-            if _is_sentinel((data.get("Errors") or [{}])[0]):
-                raise DownloadBlocked(_blocked_message(self.page))
-        raise DownloadError(_("Microsoft ne fournit pas la liste des langues"))
-
-    def link(self, sku_id, arch):
-        q = self._query(productEditionId="undefined", SKU=sku_id)
-        _s, _h, body = self.s.request(self.API + "GetProductDownloadLinksBySku?" + q,
-                                    {"Referer": self.v["referer"]})
-        data = _json(body, _("liens"))
-        errors = data.get("Errors") or []
-        if errors:
-            if _is_sentinel(errors[0]):
-                raise DownloadBlocked(_blocked_message(self.page))
-            raise DownloadError(_("Microsoft : {error}", error=errors[0].get("Value") or _("erreur inconnue")))
-        url = next((o.get("Uri") for o in data.get("ProductDownloadOptions") or []
-                    if ARCH_TYPES.get(o.get("DownloadType")) == arch), None)
-        if not url:
-            raise DownloadError(_("aucune image {arch} dans la réponse de Microsoft", arch=arch))
-        return url
-
-
 # -- Evaluation Center --
 
 def _parse_eval_page(page_html):
@@ -511,7 +407,7 @@ def _parse_eval_page(page_html):
 
 def _refresh_eval(v):
     s = _session_factory()
-    status, _h, body = s.request(EVAL_PAGE.format(page=v["page"]))
+    status, _h, body = s.request(EVAL_PAGE.format(loc="en-us", page=v["page"]))
     found = _parse_eval_page(body.decode("utf-8", "replace") if status == 200 else "")
     if not found:
         raise DownloadError(_("page de l'Evaluation Center illisible"))
@@ -540,59 +436,36 @@ def _eval_link(v, language, arch):
 
 def fetch_languages(version_key=DEFAULT_VERSION, loc=None):
     """Langues proposées aujourd'hui par Microsoft pour cette version : [(nom Microsoft, nom
-    affiché)]. Met à jour la liste de la version. Appel réseau."""
+    affiché)]. Met à jour la liste d'une version d'évaluation (appel réseau) ; pour les
+    autres versions, la liste relevée."""
     v = get_version(version_key)
-    if v["method"] == "api":
-        skus = _ApiSession(v, loc).skus()
-        out = [(k["Language"], k.get("LocalizedLanguage") or dict(LANGUAGES).get(k["Language"], k["Language"]))
-               for k in skus]
-    else:
-        found = _refresh_eval(v)
-        names = []
-        for (family, _arch), table in found.items():
-            if family == v["family"]:
-                names += [n for n in table if n not in names]
-        out = _names(names)
+    if v["method"] == "page":
+        return languages(version_key)  # liste relevée sur la page ; pas d'interrogation de Microsoft
+    names = []
+    for (family, _arch), table in _refresh_eval(v).items():
+        if family == v["family"]:
+            names += [n for n in table if n not in names]
+    out = _names(names)
     if out:
         v["languages"] = out
     return out
 
 
 def get_link(language=None, version=DEFAULT_VERSION, arch="x64", loc=None):
-    """Lien officiel de l'ISO : (url, nom du fichier, taille en octets ou None).
+    """Lien officiel d'une ISO d'évaluation : (url, nom du fichier, taille en octets ou None).
 
     `language` : nom Microsoft (« French »), sinon la langue de la version la plus proche du
-    système. Lien des pages grand public valable 24 h ; lien d'évaluation fixe.
-    Lève DownloadBlocked si Microsoft refuse cette adresse, DownloadError sinon."""
+    système. Les autres versions n'ont pas de lien direct : DownloadError, l'image se
+    télécharge depuis official_page()."""
     v = get_version(version)
+    if not can_download(version):
+        raise DownloadError(_("Microsoft ne publie pas de lien direct pour {version} : téléchargez l'image depuis "
+                              "la page officielle de Microsoft, puis choisissez le fichier ISO.",
+                              version=_(v["label"])))
     if arch not in v["arch"]:
         raise DownloadError(_("{version} n'existe pas en {arch} ({archs})", version=_(v["label"]), arch=arch,
                               archs=", ".join(v["arch"])))
-    language = language or default_language(v["key"], loc)
-    if v["method"] == "evalcenter":
-        return _eval_link(v, language, arch)
-    for attempt in range(2):
-        session = _ApiSession(v, loc)
-        sku = next((k for k in session.skus() if k.get("Language") == language), None)
-        if sku is None:
-            raise DownloadError(_("langue « {language} » non proposée par Microsoft pour {version}",
-                                   language=language, version=_(v["label"])))
-        try:
-            url = session.link(sku["Id"], arch)
-            break
-        except DownloadBlocked:
-            if attempt:
-                raise
-            time.sleep(RETRY_S)  # refus parfois passager : une nouvelle session, une fois
-    filename = urllib.parse.unquote(Path(urllib.parse.urlsplit(url).path).name) or "Windows.iso"
-    size = None
-    try:
-        status, headers, _b = session.s.request(url, method="HEAD")
-        if status == 200 and headers.get("Content-Length"):
-            size = int(headers["Content-Length"])
-    except (DownloadError, ValueError):
-        pass
-    return url, filename, size
+    return _eval_link(v, language or default_language(v["key"], loc), arch)
 
 
 # -- téléchargement --
@@ -643,8 +516,7 @@ def download(url, dest, progress=None, cancel=None, expected_size=None, chunk=1 
             part.replace(dest)
             return dest
         if e.code in (403, 410):
-            raise DownloadError(_("lien de téléchargement expiré (valable 24 h) : relancez le téléchargement pour "
-                                  "obtenir un nouveau lien")) from e
+            raise DownloadError(_("lien de téléchargement refusé ou expiré : relancez le téléchargement")) from e
         raise DownloadError(_("téléchargement refusé (HTTP {code})", code=e.code)) from e
     except (urllib.error.URLError, OSError) as e:
         raise DownloadError(_("téléchargement interrompu : {reason} (le téléchargement reprendra là où il s'est arrêté "

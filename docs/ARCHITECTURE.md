@@ -80,7 +80,9 @@
   réécrivant l'en-tête Host (CUPS refuse un Host autre que localhost sur une connexion locale).
   CUPS n'est pas ouvert au réseau, sa configuration n'est pas touchée.
 - **Installation** (`winiso.py`, `regional.py`, `install/autounattend.xml`) : ISO officiel
-  téléchargé chez Microsoft, fichier de réponses complété avec la langue de l'ISO, le format,
+  de Microsoft (versions d'évaluation téléchargées par les liens publics go.microsoft.com de
+  l'Evaluation Center ; pour les autres, page officielle ouverte dans le navigateur, puis
+  fichier choisi par l'utilisateur), fichier de réponses complété avec la langue de l'ISO, le format,
   le clavier et le fuseau du système Linux, la clé de l'utilisateur ou une clé générique.
 - **Applications** (`catalog.py`) : Office par l'outil de déploiement d'Office, le reste par
   winget, lancés dans Windows par le canal de l'agent (`vasistas exec`).

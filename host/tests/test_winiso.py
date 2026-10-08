@@ -1,7 +1,7 @@
-"""ISO de Windows 11 : lien chez Microsoft et téléchargement, sans réseau (réponses simulées)."""
+"""ISO de Windows : liens de l'Evaluation Center, page officielle et téléchargement, sans réseau
+(réponses simulées)."""
 
 import io
-import json
 import threading
 import urllib.error
 
@@ -14,17 +14,6 @@ from vasistas import i18n, winiso
 def francais(monkeypatch):
     # messages attendus en français, quelle que soit la langue du poste
     monkeypatch.setattr(i18n, "_lang", "fr")
-
-ISO_URL = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_French_x64_v2.iso?t=x"
-PAGE = ('<select><option value="" selected>Choisir</option>'
-        '<option value="3321">Windows 11 (ISO édition multiple pour les appareils x64)</option></select>'
-        '<input id="msg-01" type="hidden" value="Nous ne pouvons pas traiter votre demande. '
-        '&lt;a href=&quot;x&quot;&gt;715-123130&lt;/a&gt;"/>')
-MDT = 'var u="https://ov-df.microsoft.com/?x=1&w=0A1B2C";var rticks="+638123456789";'
-SKUS = {"Skus": [{"Id": "20050", "Language": "French", "LocalizedLanguage": "Français"},
-                 {"Id": "20046", "Language": "English", "LocalizedLanguage": "Anglais"}]}
-LINKS = {"ProductDownloadOptions": [{"DownloadType": 1, "Uri": ISO_URL}]}
-
 
 EVAL_ISO = ("https://software-static.download.prss.microsoft.com/dbazure/x/"
             "26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_fr-fr.iso")
@@ -43,8 +32,8 @@ EVAL_PAGE_HTML = (
 class FakeSession:
     """Répond selon le début de l'adresse ; garde la trace des requêtes."""
 
-    def __init__(self, links=LINKS, skus=SKUS):
-        self.links, self.skus, self.calls = links, skus, []
+    def __init__(self):
+        self.calls = []
         self.dead_links = set()   # linkid qui ne répondent plus (404)
 
     def resolve(self, url):
@@ -58,16 +47,6 @@ class FakeSession:
         self.calls.append((method, url, headers or {}))
         if "evalcenter" in url:
             return 200, {}, EVAL_PAGE_HTML.encode()
-        if "software-download/windows11" in url or "software-download/windows10ISO" in url:
-            return 200, {}, PAGE.encode()
-        if "mdt.js" in url:
-            return 200, {}, MDT.encode()
-        if "getskuinformationbyproductedition" in url:
-            return 200, {}, json.dumps(self.skus).encode()
-        if "GetProductDownloadLinksBySku" in url:
-            return 200, {}, json.dumps(self.links).encode()
-        if method == "HEAD":
-            return 200, {"Content-Length": "8473616384"}, b""
         return 200, {}, b""
 
 
@@ -75,47 +54,22 @@ class FakeSession:
 def session(monkeypatch):
     fake = FakeSession()
     monkeypatch.setattr(winiso, "_session_factory", lambda: fake)
-    monkeypatch.setattr(winiso.time, "sleep", lambda s: None)
     monkeypatch.setattr(winiso, "EVAL_LINKS", {k: dict(v) for k, v in winiso.EVAL_LINKS.items()})
     return fake
 
 
-def test_lien_officiel(session):
-    url, name, size = winiso.get_link("French", loc="fr_FR.UTF-8")
-    assert (url, name, size) == (ISO_URL, "Win11_25H2_French_x64_v2.iso", 8473616384)
-    sku_call = next(c for c in session.calls if "getskuinformation" in c[1])
-    assert "productEditionId=3321" in sku_call[1] and "Locale=fr-FR" in sku_call[1]
-    # la protection ov-df reçoit w et rticks lus dans mdt.js
-    assert any("w=0A1B2C" in c[1] and "rticks=638123456789" in c[1] for c in session.calls)
-    links_call = next(c for c in session.calls if "GetProductDownloadLinksBySku" in c[1])
-    assert "SKU=20050" in links_call[1] and links_call[2]["Referer"] == winiso.REFERER
-
-
-@pytest.mark.parametrize("error_type", [8, 9])
-def test_refus_sentinel(session, error_type):
-    session.links = {"Errors": [{"Key": "ErrorSettings.SentinelReject",
-                                 "Value": "Sentinel marked this request as rejected.", "Type": error_type}]}
-    with pytest.raises(winiso.DownloadBlocked) as e:
-        winiso.get_link("French", loc="fr_FR")
-    assert "715-123130" in str(e.value) and "<" not in str(e.value) and "évaluation" in str(e.value)
-    # un seul nouvel essai, avec une nouvelle session
-    assert sum("GetProductDownloadLinksBySku" in c[1] for c in session.calls) == 2
-    assert len({c[1].split("session_id=")[1] for c in session.calls if "vlscppe" in c[1]}) == 2
-
-
-def test_windows10_par_sa_page(session):
-    session.links = {"ProductDownloadOptions": [
-        {"DownloadType": 0, "Uri": "https://x/Win10_22H2_French_x32v1.iso?t=1"},
-        {"DownloadType": 1, "Uri": "https://x/Win10_22H2_French_x64v1.iso?t=1"}]}
-    assert winiso.get_link("French", "win10", "x86", loc="fr_FR")[1] == "Win10_22H2_French_x32v1.iso"
-    assert any("software-download/windows10ISO" in c[1] for c in session.calls)
-    links_call = next(c for c in session.calls if "GetProductDownloadLinksBySku" in c[1])
-    assert links_call[2]["Referer"].endswith("windows10ISO")
+def test_pas_de_lien_direct_pour_les_pages_grand_public(session):
+    for version in ("win11", "win10"):
+        assert not winiso.can_download(version)
+        with pytest.raises(winiso.DownloadError, match="page officielle"):
+            winiso.get_link("French", version, loc="fr_FR")
+    assert session.calls == []   # aucune requête vers Microsoft
+    assert winiso.can_download("win11_eval")
 
 
 def test_architecture_absente():
     with pytest.raises(winiso.DownloadError, match="arm64"):
-        winiso.get_link("French", "win11", "arm64", loc="fr_FR")
+        winiso.get_link("French", "win11_eval", "arm64", loc="fr_FR")
 
 
 def test_evaluation_par_lien_fixe(session, monkeypatch):
@@ -123,7 +77,6 @@ def test_evaluation_par_lien_fixe(session, monkeypatch):
     url, name, size = winiso.get_link(version="win11_eval", loc="fr_FR.UTF-8")
     assert url == EVAL_ISO and name.endswith("x64FRE_fr-fr.iso") and size == 7102060544
     assert session.calls[0][1].startswith("https://go.microsoft.com/fwlink/?linkid=2334272&")
-    assert not any("vlscppe" in c[1] for c in session.calls)  # pas de session Microsoft
 
 
 def test_evaluation_lien_mort_relu_dans_la_page(session, monkeypatch):
@@ -141,11 +94,9 @@ def test_page_evaluation():
                      ("iot", "arm64"): {"English": 4000003}}   # le VHD est ignoré
 
 
-def test_langues_en_ligne(session, monkeypatch):
-    monkeypatch.setitem(winiso.get_version("win10"), "languages", list(winiso.LANGUAGES))
-    got = winiso.fetch_languages("win10", loc="fr_FR")
-    assert got == [("French", "Français"), ("English", "Anglais")]
-    assert winiso.languages("win10") == got
+def test_langues_sans_reseau(session):
+    assert winiso.fetch_languages("win10", loc="fr_FR") == winiso.languages("win10")
+    assert session.calls == []
 
 
 def test_versions_et_cles():
@@ -188,13 +139,7 @@ def test_langue_par_defaut_selon_la_version(version, loc, lang):
 
 def test_langue_absente(session):
     with pytest.raises(winiso.DownloadError, match="Klingon"):
-        winiso.get_link("Klingon", loc="fr_FR")
-
-
-def test_liste_de_langues_vide(session):
-    session.skus = {"Skus": []}
-    with pytest.raises(winiso.DownloadError, match="langues"):
-        winiso.get_link("French", loc="fr_FR")
+        winiso.get_link("Klingon", "win11_eval", loc="fr_FR")
 
 
 @pytest.mark.parametrize("loc, lang", [
@@ -210,7 +155,10 @@ def test_langue_selon_la_locale(loc, lang):
 
 
 def test_adresses_selon_la_locale():
-    assert winiso.official_page("fr_FR.UTF-8") == "https://www.microsoft.com/fr-fr/software-download/windows11"
+    assert winiso.official_page(loc="fr_FR.UTF-8") == "https://www.microsoft.com/fr-fr/software-download/windows11"
+    assert winiso.official_page("win10", "de_DE") == "https://www.microsoft.com/de-de/software-download/windows10ISO"
+    assert winiso.official_page("ltsc_eval", "fr_FR") == \
+        "https://www.microsoft.com/fr-fr/evalcenter/download-windows-11-enterprise"
     assert winiso.buy_url("home", "de_DE").startswith("https://www.microsoft.com/de-de/d/windows-11-home/")
     assert winiso.web_locale("C") == "en-us"
 
@@ -293,5 +241,16 @@ def test_lien_expire(tmp_path, monkeypatch):
     def refuse(req, timeout=None):
         raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, None)
     monkeypatch.setattr(winiso, "_urlopen", refuse)
-    with pytest.raises(winiso.DownloadError, match="24 h"):
+    with pytest.raises(winiso.DownloadError, match="expiré"):
         winiso.download("https://x/a.iso", tmp_path / "a.iso")
+
+
+@pytest.mark.parametrize("name, version, language, ok", [
+    ("Win11_25H2_French_x64_v2.iso", "win11", "French", True),
+    ("Win10_22H2_German_x64v1.iso", "win10", "German", True),
+    ("Win11_25H2_French_x64_v2.iso", "win10", "French", False),
+    ("Win11_25H2_English_x64_v2.iso", "win11", "French", False),
+    ("windows.iso", "win11", "French", False),
+])
+def test_nom_de_fichier_iso(name, version, language, ok):
+    assert winiso.iso_matches(name, version, language) is ok

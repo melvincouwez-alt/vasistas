@@ -200,9 +200,10 @@ class Wizard(Gtk.Window):
     # -- 2. Windows : version, langue, licence, ISO, pilotes --
 
     def page_windows(self):
-        box = self.page("Windows", _("Choisissez la version et la langue de Windows, puis le mode de licence. Vasistas "
-                                     "télécharge l'image d'installation directement depuis les serveurs de "
-                                     "Microsoft."), "computer")
+        box = self.page("Windows", _("Choisissez la version et la langue de Windows, puis le mode de licence. Les "
+                                     "versions d'évaluation se téléchargent directement depuis Microsoft ; pour les "
+                                     "autres, Vasistas ouvre la page officielle de Microsoft, puis vous choisissez le "
+                                     "fichier ISO téléchargé."), "computer")
         cfg = vm.load_config()
         self.versions = winiso.VERSIONS
         keys = [v["key"] for v in self.versions]
@@ -239,7 +240,9 @@ class Wizard(Gtk.Window):
             self.license_box.append(w)
         self.license_box.append(dim(_("Sans clé, Windows s'installe dans l'édition choisie et fonctionne avec un "
                                       "rappel d'activation, jusqu'à ce que vous saisissiez votre clé "
-                                      "(Paramètres, Système, Activation).")))
+                                      "(Paramètres, Système, Activation). Une licence Windows valide reste "
+                                      "nécessaire : la clé générique publiée par Microsoft sert seulement à "
+                                      "choisir l'édition pendant l'installation.")))
         self.buy = Gtk.LinkButton(label=_("Acheter une licence Windows 11 Professionnel"), uri=winiso.buy_url(),
                                   halign=Gtk.Align.START)
         self.license_box.append(self.buy)
@@ -259,7 +262,7 @@ class Wizard(Gtk.Window):
         self.dl_btn.connect("clicked", lambda *_: self.download_iso())
         pick = Gtk.Button(label=_("Choisir un fichier ISO…"))
         pick.connect("clicked", lambda *_: self.pick_iso())
-        page = Gtk.Button(label=_("Ouvrir la page de Microsoft"))
+        self.page_btn = page = Gtk.Button(label=_("Ouvrir la page de Microsoft"))
         page.connect("clicked", lambda *_: Gtk.UriLauncher.new(self.official_page()).launch(self, None, None))
         self.stop_btn = Gtk.Button(label=_("Annuler"), visible=False)
         self.stop_btn.connect("clicked", lambda *_: self.cancel.set())
@@ -287,7 +290,7 @@ class Wizard(Gtk.Window):
         return self.versions[self.version.get_selected()]
 
     def official_page(self):
-        return self.current_version().get("page") or winiso.official_page()
+        return winiso.official_page(self.current_version()["key"])
 
     def on_version(self, initial=False):
         v = self.current_version()
@@ -297,8 +300,9 @@ class Wizard(Gtk.Window):
         self.version_note.set_label(note)
         self.langs = winiso.languages(v["key"])
         names = [_(n) for _c, n in self.langs]
-        self.language.set_model(Gtk.StringList.new(names))
+        # lue avant set_model : changer de liste émet notify::selected, qui enregistre la 1re langue
         wanted = vm.load_config().get("windows_language") if initial else None
+        self.language.set_model(Gtk.StringList.new(names))
         codes = [c for c, _ in self.langs]
         if wanted not in codes:
             wanted = winiso.default_language(v["key"])
@@ -337,14 +341,26 @@ class Wizard(Gtk.Window):
                 _("Cette image d'installation ne correspond pas à la version et à la langue choisies : téléchargez une "
                   "nouvelle image.")
             if info.get("picked"):
-                hint = _("Image choisie manuellement : vérifiez qu'elle correspond à la version et à la langue "
+                hint = _("Image choisie dans vos fichiers : vérifiez qu'elle correspond à la version et à la langue "
                          "choisies.")
             self.iso_box.append(check_line(same, _("Image d'installation prête : {name}", name=name), hint))
-        else:
+        elif winiso.can_download(cfg.get("windows_version", winiso.DEFAULT_VERSION)):
             self.iso_box.append(check_line(False, _("Image d'installation à télécharger (5 à 8 Go)"),
                                            _("Téléchargement direct depuis les serveurs de Microsoft, en 5 à 20 "
                                              "minutes environ.")))
+        else:
+            lang = dict(winiso.LANGUAGES).get(cfg.get("windows_language"))
+            self.iso_box.append(check_line(False, _("Image d'installation à télécharger depuis la page de Microsoft "
+                                                    "(5 à 8 Go)"),
+                                           _("Cliquez sur « Ouvrir la page de Microsoft », choisissez la langue "
+                                             "« {language} » et la version 64 bits, téléchargez l'image, puis "
+                                             "cliquez sur « Choisir un fichier ISO… ».",
+                                             language=_(lang) if lang else cfg.get("windows_language") or "")))
+        direct = winiso.can_download(self.current_version()["key"])
+        self.dl_btn.set_visible(direct)
         self.dl_btn.set_sensitive(not self.downloading and not installed)
+        for b, suggested in ((self.dl_btn, direct), (self.page_btn, not direct)):
+            (b.add_css_class if suggested else b.remove_css_class)(Granite.STYLE_CLASS_SUGGESTED_ACTION)
         clear(self.virtio_box)
         virtio = vm.VIRTIO_ISO.exists()
         self.virtio_box.append(check_line(virtio, _("Pilotes virtio pour Windows"),
@@ -375,7 +391,11 @@ class Wizard(Gtk.Window):
             vm.WIN_ISO.parent.mkdir(parents=True, exist_ok=True)
             vm.WIN_ISO.unlink(missing_ok=True)
             vm.WIN_ISO.symlink_to(path)
-            set_config(windows_iso={"name": os.path.basename(path), "picked": True})
+            cfg = vm.load_config()
+            info = {"name": os.path.basename(path), "picked": True}
+            if winiso.iso_matches(info["name"], cfg.get("windows_version"), cfg.get("windows_language")):
+                info.update(version=cfg.get("windows_version"), language=cfg.get("windows_language"))
+            set_config(windows_iso=info)
             self.refresh_windows()
         dialog.open(self, None, done)
 
@@ -386,7 +406,7 @@ class Wizard(Gtk.Window):
         self.cancel.clear()
         self.progress.set_visible(True)
         self.progress.set_fraction(0)
-        self.progress.set_text(_("Demande du lien de téléchargement à Microsoft…"))
+        self.progress.set_text(_("Recherche du lien de téléchargement chez Microsoft…"))
         self.stop_btn.set_visible(True)
         self.refresh_windows()
 
