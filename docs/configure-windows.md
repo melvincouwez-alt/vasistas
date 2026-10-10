@@ -2,11 +2,11 @@
 
 `install/configure-windows.ps1` prépare une machine Windows 10 ou 11 (VM QEMU/KVM) installée
 sans l'assistant de Vasistas, ou répare une installation existante. Le script est idempotent :
-ce qui est déjà en place n'est pas touché, et il ne redémarre jamais Windows lui-même.
+il ne modifie pas ce qui est déjà en place. Le script ne redémarre jamais Windows.
 
 ## Lancer le script
 
-Depuis l'hôte, Windows démarré et l'agent en marche :
+Depuis l'hôte, avec Windows démarré et l'agent en cours d'exécution :
 
 ```
 script=~/.local/opt/vasistas/current/install/configure-windows.ps1
@@ -14,7 +14,7 @@ vasistas exec "@$script"                                            # applique
 vasistas exec "$(printf '$Check = $true\n'; cat "$script")"        # contrôle seul
 ```
 
-`vasistas exec` envoie le texte du script : les paramètres se posent en variables avant lui
+`vasistas exec` envoie le texte du script : les paramètres se définissent comme variables avant le script
 (`$Check = $true`, `$User = 'nom'`, `$AutoLogonPassword = '…'`, `$AgentSource = '…'`,
 `$NoDownload = $true`, `$SkipDrivers = $true`).
 
@@ -42,32 +42,33 @@ lire. Le code de sortie vaut 1 si une étape a échoué, 2 pour un paramètre in
 ## Les étapes
 
 1. Droits administrateur, puis résolution du compte cible (compte local d'abord).
-2. Pilotes virtio : `virtio-win-gt-x64.msi` cherché sur les lecteurs (CD virtio-win), sinon
-   téléchargé chez Fedora. Pendant leur installation, le canal de l'agent peut se couper
-   quelques secondes ; un redémarrage est ensuite demandé.
+2. Pilotes virtio : le script cherche `virtio-win-gt-x64.msi` sur les lecteurs (CD virtio-win),
+   sinon le télécharge depuis Fedora. Pendant l'installation des pilotes, le canal de l'agent
+   peut être interrompu quelques secondes. Le script demande ensuite un redémarrage.
 3. WinFsp, nécessaire aux dossiers partagés : MSI local, sinon winget (`WinFsp.WinFsp`), sinon
    la dernière version publiée sur GitHub.
 4. Service VirtIO-FS lancé par WinFsp (clé `HKLM\SOFTWARE\WOW6432Node\WinFsp\Services\virtiofs`,
-   comme `boot.ps1`). Le service `VirtioFsSvc` de virtio-win repasse en démarrage manuel s'il
-   était automatique : il monterait un dossier en concurrence avec WinFsp.
+   comme `boot.ps1`). Si le service `VirtioFsSvc` de virtio-win est en démarrage automatique,
+   le script le repasse en démarrage manuel : sinon, ce service monterait un dossier en
+   concurrence avec WinFsp.
 5. Agent Vasistas dans `C:\Program Files\Vasistas\Agent`, `boot.ps1`, marqueur `installed`
-   (sans lui, `boot.ps1` éteint Windows à l'ouverture de session) et tâche planifiée
-   « Vasistas » à l'ouverture de session du compte, avec privilèges élevés. Un fichier
-   installé plus récent que la source (agent mis à jour à chaud) est gardé. Si l'agent tourne,
-   ses fichiers sont renommés et la nouvelle version part à son prochain lancement : le
-   processus n'est jamais arrêté.
+   (sans ce marqueur, `boot.ps1` arrête Windows à l'ouverture de session) et tâche planifiée
+   « Vasistas » à l'ouverture de session du compte, avec privilèges élevés. Le script conserve
+   un fichier installé plus récent que la source (agent mis à jour sans redémarrage). Si l'agent
+   est en cours d'exécution, le script renomme ses fichiers et la nouvelle version démarre au
+   prochain lancement de l'agent : le processus n'est jamais arrêté.
 6. Réglages de la machine (ceux de `specialize.ps1`) : ni veille ni hibernation sur secteur,
    pas d'écran de verrouillage, invite UAC sur le bureau courant, pas de redémarrage
    automatique des mises à jour pendant une session.
-7. Réglages de la session (ceux de `boot.ps1`) : animations et transparence coupées, fond noir,
-   bannières de notification coupées (l'agent les rétablit pour les relayer au bureau si
+7. Réglages de la session (ceux de `boot.ps1`) : animations et transparence désactivées, fond noir,
+   bannières de notification désactivées (l'agent les rétablit pour les relayer au bureau si
    l'option est active), Office sans accélération matérielle, barre des tâches masquée. Si la
-   session du compte n'est pas ouverte, `boot.ps1` les appliquera à la prochaine ouverture. Le
+   session du compte n'est pas ouverte, `boot.ps1` applique ces réglages à la prochaine ouverture. Le
    fond d'écran et la barre des tâches changent à la prochaine ouverture de session :
    l'Explorateur n'est pas relancé.
-8. Ouverture de session automatique : sans elle, Windows attend à l'écran de connexion et
-   Vasistas ne voit aucune fenêtre. Avec `-AutoLogonPassword`, le mot de passe est vérifié,
-   puis rangé en secret LSA (pas en clair dans le registre).
+8. Ouverture de session automatique : sans elle, Windows reste sur l'écran de connexion et
+   Vasistas ne voit aucune fenêtre. Avec `-AutoLogonPassword`, le script vérifie le mot de passe,
+   puis l'enregistre comme secret LSA (et non en clair dans le registre).
 
 ## Revenir en arrière
 
@@ -83,6 +84,7 @@ lire. Le code de sortie vaut 1 si une étape a échoué, 2 pour un paramètre in
 
 - Le mot de passe passé par `vasistas exec` transite par le canal de l'agent et un fichier
   temporaire de Windows, effacé après l'exécution.
-- Le contrôle ne sait pas lire le secret LSA : une ouverture de session automatique active est
-  jugée correcte d'après le registre seulement.
-- Lancé sous le compte SYSTEM, le script ne peut pas deviner le compte cible : passer `-User`.
+- Le contrôle ne peut pas lire le secret LSA : il juge une ouverture de session automatique
+  correcte d'après le registre seulement.
+- Lancé sous le compte SYSTEM, le script ne peut pas déterminer le compte cible : il faut alors
+  passer `-User`.

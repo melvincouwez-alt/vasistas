@@ -35,10 +35,10 @@ de `hello` de l'invité. À chaque `hello` reçu, l'invité renvoie son `hello` 
 - `hello {version, agentVersion, screen:[w,h], dpi}` : `version` = version du protocole (1),
   `agentVersion` = version de Vasistas pour laquelle l'agent est construit (« 0.9.0 », égale à
   `VERSION` de `host/vasistas/version.py`) ; l'hôte la compare avec `version.newer()` et propose
-  une mise à jour de l'agent s'il est plus ancien. Absent : agent antérieur à la 0.6.
+  une mise à jour de l'agent si celui-ci est plus ancien. Champ absent : agent antérieur à la 0.6.
 - `window.new {id, title, rect:[x,y,w,h], kind, owner, maximized, dpi, nc, sizable}` (`sizable` faux : pas de bord redimensionnable, écran d'accueil)
   `kind` : `normal` | `dialog` | `popup`. `owner` : id ou 0. `dpi` : DPI de la fenêtre dans
-  Windows (GetDpiForWindow), qui ne suit la nouvelle échelle qu'une fois la fenêtre posée.
+  Windows (GetDpiForWindow), qui prend la nouvelle échelle seulement une fois le déplacement de la fenêtre terminé.
   `nc` : hauteur de la barre de titre dessinée par Windows, 0 si l'application dessine la sienne.
 - `window.update {id, title?, rect?, maximized?, minimized?, dpi?, nc?}`
 - `window.close {id}`
@@ -63,8 +63,8 @@ Champs facultatifs de `hello` et `display`, gardés jusqu'au prochain message qu
 
 - `clamp` (vrai par défaut) : garde-fou à la création des fenêtres, voir « Placement des fenêtres ».
 - `notifications` (faux par défaut) : bannières de Windows relayées à l'hôte, voir « Notifications ».
-  Vrai : l'agent permet les bannières dans Windows (`ToastEnabled` = 1), les lit et les pousse
-  hors de l'écran. Faux : il les coupe (`ToastEnabled` = 0, comme boot.ps1).
+  Vrai : l'agent autorise les bannières dans Windows (`ToastEnabled` = 1), les lit et les déplace
+  hors de l'écran. Faux : l'agent les désactive (`ToastEnabled` = 0, comme boot.ps1).
 - `tray` (faux par défaut) : icônes de la zone de notification relayées, voir « Zone de notification ».
 - `launch {req, cmd, args}`
 - `bench.post {id, i}` : banc de l'hôte, un caractère posté à la fenêtre (WM_CHAR, sans la mettre
@@ -104,7 +104,7 @@ DWM, comme `rect` de window.new), l'agent ajoute lui-même les bordures invisibl
 
 - `window.place {id, x, y, w, h}` (hôte -> invité) : la fenêtre de premier niveau (pas un popup)
   est restaurée si elle est agrandie ou réduite dans Windows, sans être activée, puis posée à ce
-  rectangle, ramené dans l'écran (hors de l'écran, SendInput ne l'atteindrait plus). L'agent
+  rectangle, ramené dans l'écran (hors de l'écran, SendInput ne pourrait plus l'atteindre). L'agent
   renvoie le `window.update` habituel.
 - `windows.reset {max}` (hôte -> invité, `max` = 0.8 par défaut, borné entre 0.2 et 1) : pour chaque
   fenêtre suivie hors popups et hors fenêtres réduites : restaurée si agrandie, taille ramenée à
@@ -116,7 +116,7 @@ DWM, comme `rect` de window.new), l'agent ajoute lui-même les bordures invisibl
 
 Garde-fou à la création : une nouvelle fenêtre de premier niveau (normale ou dialogue) plus
 grande que l'écran de Windows ou qui en sort est ramenée dedans par la même règle, avec
-`max` = 0.9, avant son premier `window.new`, sauf si elle est née agrandie. Désactivé par
+`max` = 0.9, avant son premier `window.new`, sauf si elle a été créée agrandie. Désactivé par
 `clamp: false` dans `hello` ou `display` (la fenêtre est alors seulement décalée pour tenir à
 l'écran, comme avant).
 
@@ -140,11 +140,11 @@ contenu XAML). À l'apparition, la fenêtre ne contient qu'un ScrollViewer vide 
 toutes les 100 ms et à chaque événement UIA StructureChanged, pendant 30 s au plus tant qu'elle
 est visible. Chaque élément cliquable portant au moins deux textes (ou un nom sur plusieurs
 lignes) est une bannière ; textes dans l'ordre : nom de l'application, titre, corps (deux
-textes : titre et corps). Une bannière n'est envoyée qu'après deux lectures identiques. La
-fenêtre est poussée hors de l'écran (-32000, -32000), sans être fermée, une fois la bannière lue
+textes : titre et corps). Une bannière n'est envoyée qu'après deux lectures identiques. L'agent
+déplace la fenêtre hors de l'écran (-32000, -32000), sans la fermer, une fois la bannière lue
 ou au bout de 2,5 s. Journal : l'arbre UIA de la première bannière lue, ou d'une bannière encore
-vide après 3 s. UserNotificationListener, l'API propre, exige une identité de paquet (MSIX) :
-hors de portée de l'agent .NET Framework.
+vide après 3 s. UserNotificationListener, l'API prévue pour cet usage, exige une identité de paquet (MSIX),
+que l'agent .NET Framework n'a pas.
 
 ## Zone de notification
 
@@ -159,10 +159,10 @@ Active seulement avec `tray: true` dans `hello`/`display`.
   `registry` (repli, voir plus bas).
 - `tray.click {key, button, x, y}` (hôte -> invité) : `button` `left` ou `right`. Gauche :
   InvokePattern de l'icône, sans bouger le pointeur. Droit (ou gauche sans Invoke) : l'agent
-  amène le pointeur au bas de l'écran de Windows pour faire sortir la barre des tâches masquée,
+  amène le pointeur au bas de l'écran de Windows pour faire apparaître la barre des tâches masquée,
   puis clique au centre de l'icône ; le menu s'ouvre près de l'icône, en bas à droite de l'écran
   de Windows, et arrive comme une fenêtre `popup`. `x`, `y` (position du clic chez l'hôte) sont
-  acceptés mais pas utilisés : l'application place son menu elle-même.
+  acceptés mais pas utilisés : l'application place elle-même son menu.
 
 Icônes lues par UI Automation : boutons `NotifyItemIcon` de la barre des tâches XAML (Windows 11
 22H2 et suivants) et de `TopLevelWindowForOverflowXamlIsland`, ou boutons des barres d'outils de
@@ -175,13 +175,13 @@ vue brute, depuis `Shell_TrayWnd` puis, si rien n'y est trouvé, depuis chaque f
 `Windows.UI.Composition.DesktopWindowContentBridge` (île XAML) de la barre.
 
 Repli si UI Automation ne trouve aucune icône : entrées de NotifyIconSettings dont l'exécutable
-tourne (`source: "registry"`, infobulle = `InitialTooltip` ou description du fichier). Pas de
+est en cours d'exécution (`source: "registry"`, infobulle = `InitialTooltip` ou description du fichier). Pas de
 menu dans ce cas : `tray.click` gauche met au premier plan la fenêtre principale du programme,
 ou le relance s'il n'en a pas ; droit ne fait rien. Le passage d'une source à l'autre et, la
 première fois que UIA ne trouve rien, l'arbre brut de la barre des tâches sont écrits au journal.
 - `capture {occluded_ms}` : délai de base entre deux captures d'une fenêtre recouverte
   (profil de puissance de l'hôte : 1000 sur batterie, 500, 250 en performances ; borné à
-  100..5000). Un agent plus ancien l'ignore. `timer_ms` (0 sur batterie, 1 sinon) : l'agent tient la
-  minuterie de Windows à 1 ms tant que l'hôte est là et qu'au moins une fenêtre est suivie ; il pose
-  `GlobalTimerResolutionRequests=1` au démarrage (effectif au démarrage suivant de Windows), sans
-  quoi la demande ne vaudrait que pour l'agent.
+  100..5000). Un agent plus ancien l'ignore. `timer_ms` (0 sur batterie, 1 sinon) : l'agent maintient la
+  minuterie de Windows à 1 ms tant que l'hôte est connecté et qu'au moins une fenêtre est suivie. Il écrit
+  `GlobalTimerResolutionRequests=1` au démarrage (effectif au démarrage suivant de Windows) ; sans
+  cette valeur, la demande vaudrait seulement pour l'agent.

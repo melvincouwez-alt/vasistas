@@ -5,7 +5,7 @@
   automatique (`install/autounattend.xml`, `install/specialize.ps1`).
 - **Image** : QEMU tourne avec `-display dbus,p2p=yes`. L'hôte s'inscrit comme écouteur
   de l'écran (`host/vasistas/display.py`) et reçoit, en mémoire partagée, les zones
-  modifiées. Une seule texture GTK pour l'écran entier ; chaque fenêtre en affiche sa
+  modifiées. Une seule texture GTK couvre l'écran entier ; chaque fenêtre en affiche sa
   portion. Les fenêtres recouvertes dans Windows sont capturées par l'agent
   (Windows.Graphics.Capture, repli PrintWindow) ; seules les tuiles modifiées sont envoyées,
   compressées en zstd (deflate si l'hôte ou la DLL ne le permettent pas).
@@ -24,20 +24,20 @@
   (`~/.config/mimeapps.list`, l'ancienne est gardée et revient quand l'extension n'est
   plus désignée). Au double-clic, le chemin Linux devient un chemin Windows par les
   dossiers partagés (`~/Documents/a.docx` → `Z:\a.docx`). Hors partage, l'hôte propose
-  d'ouvrir une copie dans Téléchargements ou de partager le dossier (branché à chaud).
+  d'ouvrir une copie dans Téléchargements ou de partager le dossier (ajouté sans redémarrer Windows).
   Types absents de la base MIME (.msg, .pbix, .pbit, .pbids) déclarés dans
   `~/.local/share/mime/packages/<APP_ID>.xml`.
 - **Dossiers de Windows** (`host/vasistas/folders.py`, page Windows du compagnon) :
   Documents, Téléchargements, Images, Musique, Vidéos et Bureau de Windows peuvent pointer
-  sur les dossiers Linux (SHSetKnownFolderPath), partagés au passage s'il le faut ; le chemin
-  d'avant est gardé pour revenir en arrière.
+  vers les dossiers Linux (SHSetKnownFolderPath), que Vasistas partage si nécessaire. L'ancien
+  chemin est conservé pour pouvoir revenir en arrière.
 - **Échelle** : Windows n'a qu'un écran, donc une seule échelle, celle de l'écran Linux qui
   porte le plus de surface de fenêtres Windows (recalculée quand une fenêtre change d'écran,
   s'ouvre ou se ferme, jamais sur un simple changement de focus). Résolution de l'invité
   fixe : le plus grand écran Linux sur chaque axe, en pixels physiques. L'hôte n'envoie que des paliers acceptés par Windows (100,
   125… 500 %) : 175 % pour un écran à 1,667. Chaque fenêtre annonce son DPI
   (`GetDpiForWindow`, champ `dpi` de window.new/window.update), car Windows ne la redessine
-  à la nouvelle échelle qu'une fois posée. Si ce DPI est le palier de l'écran où se trouve
+  à la nouvelle échelle qu'une fois son déplacement terminé. Si ce DPI est le palier de l'écran où se trouve
   la fenêtre, l'image est affichée pixel pour pixel par un nœud de texture simple, calé sur
   les pixels de l'écran (`append_scaled_texture` est rendu à la taille logique puis agrandi,
   même en NEAREST : test `tests/test_render.py`). Sinon (fenêtre sur un autre écran), elle
@@ -46,22 +46,22 @@
   « Vasistas » dans les réglages de son. Désactivable (config `sound`).
 - **Barre de titre du bureau** (expérimental, config `native_titlebar`) : l'agent annonce
   la hauteur de la barre de titre dessinée par Windows (champ `nc`, 0 si l'application
-  dessine la sienne) ; l'hôte masque ces lignes et met une barre elementary à la place.
+  dessine la sienne) ; l'hôte masque ces lignes et affiche une barre elementary à la place.
 - **Gala** mémorise taille et place de chaque fenêtre par application (WindowStateSaver)
   et les réimpose à l'ouverture : pendant 1,5 s après l'affichage, l'hôte redemande la
   taille de Windows au lieu de la lui transmettre.
-- **Lecteurs partagés** : brancher un dossier à chaud fait réinitialiser par Windows les
-  autres périphériques virtio-fs. L'agent (`ShareGuard.cs`) vérifie les lecteurs toutes les
+- **Lecteurs partagés** : quand un dossier est partagé sans redémarrer Windows, Windows
+  réinitialise les autres périphériques virtio-fs. L'agent (`ShareGuard.cs`) vérifie les lecteurs toutes les
   30 s et avant d'ouvrir un fichier, et remonte ceux qui ne répondent plus.
-- **Veille** (`sleep.py`) : la VM est suspendue (QMP stop) sans usage ; l'heure de Windows
+- **Veille** (`sleep.py`) : la VM est suspendue (QMP stop) quand personne ne l'utilise ; l'heure de Windows
   est remise à jour au réveil. **Mémoire** (`balloon.py`) : ballon virtio piloté d'après
   l'usage réel de Windows.
-- **Indicateur du panneau** (`indicator.py`, `vasistas indicator`) : processus à part, sans
+- **Indicateur du panneau** (`indicator.py`, `vasistas indicator`) : processus séparé, sans
   GTK, StatusNotifierItem + menu com.canonical.dbusmenu écrits avec Gio.DBus. État lu par
   `vm.pid()` et la requête `status` du socket de contrôle (qui ne réveille pas Windows) ;
   commandes de la VM partagées avec le compagnon dans `winctl.py`. Option `indicator` de
-  config.json, lanceur de session posé par `vasistas desktop`.
-- **Puissance** (`power.py`, branché par `SleepManager`) : profil automatique (`resources_auto`) :
+  config.json, lanceur de session installé par `vasistas desktop`.
+- **Puissance** (`power.py`, appelé par `SleepManager`) : profil automatique (`resources_auto`) :
   batterie ou mode Économie de power-profiles-daemon -> « battery », secteur -> profil choisi.
   Une application de `app_modes` impose son mode d'affichage tant qu'elle est au premier plan
   (réglages à chaud seulement). Cœurs et mémoire de QEMU
@@ -72,14 +72,14 @@
 - **Clavier** (`KeyboardMixin`, page « Clavier ») : Super et Alt+Tab envoyés à Windows sur demande,
   par l'inhibition des raccourcis du compositeur (zwp_keyboard_shortcuts_inhibit_manager_v1 via
   gdk_toplevel_inhibit_system_shortcuts). Gala demande l'autorisation une fois par fenêtre ;
-  Super+Échap rend les raccourcis au bureau. Raccourcis réservés : `reserved_shortcuts`.
+  Super+Échap redonne les raccourcis au bureau. Raccourcis réservés : `reserved_shortcuts`.
 - **Lanceurs** : `launcher_suffix` (« Word (Windows) »), `launcher_emblem`, `hidden_apps`
   (NoDisplay gardé quand les lanceurs sont réécrits) ; `desktop.apply_launcher_options()`.
 - **Imprimantes** (`printers.py`, page « Imprimantes ») : chaque file CUPS devient une imprimante IPP
-  dans Windows (`http://10.0.2.6:631/printers/<file>`). 10.0.2.6 n'existe que dans le réseau user de
-  QEMU : `guestfwd=…-cmd:printproxy.py` relaie chaque connexion vers `/run/cups/cups.sock` en
+  dans Windows (`http://10.0.2.6:631/printers/<file>`). 10.0.2.6 existe seulement dans le réseau utilisateur
+  de QEMU : `guestfwd=…-cmd:printproxy.py` relaie chaque connexion vers `/run/cups/cups.sock` en
   réécrivant l'en-tête Host (CUPS refuse un Host autre que localhost sur une connexion locale).
-  CUPS n'est pas ouvert au réseau, sa configuration n'est pas touchée.
+  CUPS n'est pas ouvert au réseau et sa configuration n'est pas modifiée.
 - **Installation** (`winiso.py`, `regional.py`, `install/autounattend.xml`) : ISO officiel
   de Microsoft (versions d'évaluation téléchargées par les liens publics go.microsoft.com de
   l'Evaluation Center ; pour les autres, page officielle ouverte dans le navigateur, puis
@@ -89,22 +89,24 @@
   winget, lancés dans Windows par le canal de l'agent (`vasistas exec`).
 - **Points de restauration** (`restore.py`, `vasistas restore`) : instantanés internes de
   disk.qcow2 nommés `vas-a-…` (automatiques) ou `vas-m-…` (manuels), motif et nom dans
-  restore.json. VM en marche : l'agent vide le cache disque (Write-VolumeCache), la VM est mise
-  en pause le temps de `blockdev-snapshot-internal-sync`. Retour à un point VM arrêtée seulement
-  (`qemu-img snapshot -a`). Points automatiques (option `restore_auto`, désactivée par défaut)
-  avant Windows Update et les installations, les plus anciens supprimés au-delà de `restore_keep`. L'instantané de l'allègement n'en fait pas partie.
+  restore.json. Si la VM est démarrée, l'agent vide le cache disque (Write-VolumeCache) et la VM
+  est mise en pause pendant `blockdev-snapshot-internal-sync`. Le retour à un point se fait
+  seulement VM arrêtée (`qemu-img snapshot -a`). Points automatiques (option `restore_auto`, désactivée par défaut)
+  avant Windows Update et les installations ; au-delà de `restore_keep`, les plus anciens sont
+  supprimés. L'instantané de l'allègement ne fait pas partie de ces points automatiques.
 - **Diagnostic** (`diagnose.py`, `vasistas diagnose [--report]`) : vérifications, réparations
   simples, rapport anonymisé (dossier personnel, utilisateur, machine, mot de passe, fichiers
   des dossiers partagés masqués). **Notifications à action** (`notices.py`) :
   org.freedesktop.Notifications par Gio.DBus, repli notify-send.
 - **Écrans et place des fenêtres** (`placement.py`) : écran voulu par application (`screens` dans
   config.json : actif, dernier, ou un connecteur), taille et écran mémorisés par configuration
-  d'écrans (`windows.json`), fenêtre jamais plus grande que 90 % de son écran. Sous Wayland
-  l'application ne place pas ses fenêtres : Gala centre les nouvelles (`center-new-windows`, avec
+  d'écrans (`windows.json`), fenêtre jamais plus grande que 90 % de son écran. Sous Wayland,
+  l'application ne place pas ses fenêtres : Gala centre les nouvelles fenêtres (`center-new-windows`, avec
   un décalage en cascade si une fenêtre occupe déjà la place) mais réimpose sinon la place de la
   n-ième fenêtre de l'appli (WindowStateSaver), sauf pour une fenêtre non redimensionnable au
-  moment où elle apparaît : c'est le cas le temps de l'apparition. Changer d'écran = plein écran
-  sur l'écran voulu puis retour (Mutter garde la position relative dans l'espace libre, donc le
+  moment où elle apparaît ; Vasistas rend donc la fenêtre non redimensionnable pendant son
+  apparition. Pour changer d'écran, l'hôte passe la fenêtre en plein écran sur l'écran voulu,
+  puis la rétablit (Mutter garde la position relative dans l'espace libre, donc le
   centrage). « Réinitialiser les affichages » (requête `reset_windows`, `vasistas reset-windows`,
   automatique au branchement d'un écran) : `windows.reset` à l'agent, taille ramenée à 80 %,
   fenêtre masquée puis réaffichée (Gala la recentre), puis passée sur son écran.
@@ -116,5 +118,5 @@
   notification du bureau (clic = bannière ouverte dans Windows), chaque icône un
   StatusNotifierItem du panneau (clics renvoyés à Windows). Repli sans menu sur
   NotifyIconSettings quand la barre des tâches n'est pas lisible.
-- **Image** : sans fenêtre visible sous Linux, rien n'est dessiné (l'image entière est refaite
+- **Cadence d'affichage** : sans fenêtre visible sous Linux, rien n'est dessiné (l'image entière est refaite
   au retour) ; sans fenêtre Windows active, 10 images par seconde au plus.
